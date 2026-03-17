@@ -1,29 +1,107 @@
 import { useState, useRef } from 'react';
 import { T } from '../styles/tokens';
+import { DCS } from '../data/dcs';
+import { LOG } from '../data/log';
 
-const CANNED = {
-  "What's our biggest risk right now?":
-`Total network exposure if no action taken: $221,300. Want me to break that down?
+// ─── System prompt ────────────────────────────────────────────────────────────
+function buildSystemPrompt() {
+  const dcContext = DCS.map(dc => {
+    const customerLines = dc.customers
+      .map(c => `    - ${c.name}: ${c.pct}% (${c.units.toLocaleString()} units)${c.atRisk ? '  ⚠ AT RISK' : ''}`)
+      .join('\n');
+    return `DC: ${dc.id} — ${dc.city}, ${dc.state}
+  Status: ${dc.statusLabel}
+  Available: ${dc.available.toLocaleString()} units | Days of Supply: ${dc.daysSupply} | Fill Rate: ${dc.fillRate}%
+  Customer Mix:
+${customerLines}`;
+  }).join('\n\n');
 
-The most urgent: Pedigree Dentastix Large at Atlanta DC. 1,520 available units against actual velocity of 1,860 per week — 2.7 days of supply. Storm closes Memphis outbound window Wednesday night. Walmart promotional window opens November 15th.
+  const recentLog = LOG.slice(0, 5).map(r =>
+    `  ${r.id} (${r.date}): ${r.from} → ${r.to} | ${r.skus} | Cost: $${r.cost.toLocaleString()} | Avoided: $${r.avoided.toLocaleString()} | ${r.status}`
+  ).join('\n');
 
-Customer impact: Walmart represents 45% of Atlanta's volume — 685 units directly at risk. PetSmart is 30% (456 units). Both at fill rate risk if transfer isn't approved before Wednesday.
+  const avgFR = (DCS.reduce((s, dc) => s + dc.fillRate, 0) / DCS.length).toFixed(1);
 
-Recommended action: consolidated FTL from Memphis, 1,400 units Dentastix Large + 380 units Greenies Medium, 91% load, $2,840 cost, $139,600 risk avoided. Rebalance Score: 94. Window closes in 36 hours.
+  return `You are the Uranus PetCare Supply Execution Agent — a supply chain decision-support system for Mars Petcare (synthetic demo data). You help supply chain managers make inventory transfer decisions across a network of 6 US distribution centers.
 
-Root cause: Atlanta has run above plan for 6 consecutive weeks, accelerating from 980 to 1,860/week. Q4 Southeast seasonal index is 1.08 — last updated Q2 2024. Correct safety stock at actual velocity is ~1,430 units, not the current 800.`,
-  "Which retailer is most at risk?":
-`Walmart is the most exposed retail partner across the network today.
+CURRENT DATE: November 4, 2024
 
-Atlanta DC: Walmart is 45% of outbound volume — ~685 units against 2.7 days of supply. With the promotional window opening November 15th and a $45/case fill rate penalty for missed fills, this is the highest financial risk position.
+════════════════════════════════════════
+NETWORK SNAPSHOT — 6 DISTRIBUTION CENTERS
+════════════════════════════════════════
+${dcContext}
 
-Charlotte DC: Walmart is 38% of volume at a DC running 38% above plan. Not critical today but builds toward a service failure if no transfer is approved before November 8th.
+════════════════════════════════════════
+REBALANCE SCORE MATRIX (SKU × DC)
+Score ≥ 75 = Act now · 40–74 = Review · < 40 = Stable
+════════════════════════════════════════
+SKU               | MEM | ATL | CLT | CHI |  LA | DFW
+Dentastix Large   |   8 |  94 |  74 |  22 |  15 |  12
+Greenies Medium   |   9 |  88 |  71 |  28 |  14 |  10
+Dentastix Small   |   7 |  58 |  44 |  18 |  12 |   9
+Cesar Softies     |   6 |  12 |  10 |   8 |  42 |   8
 
-PetSmart is second most exposed — 30% of Atlanta volume with a confirmed holiday end-cap display at risk.
+════════════════════════════════════════
+PENDING STOCK TRANSFER ORDERS
+════════════════════════════════════════
+STO-001 — URGENT (36hr window)
+  Route:     Memphis DC → Atlanta DC
+  SKUs:      Dentastix Large (1,400u) + Greenies Medium (380u)
+  Mode:      FTL Consolidated · 91% load
+  Cost:      $2,840 | Risk avoided: $139,600 | Rebalance Score: 94
+  Customers: Walmart (45%) · PetSmart (30%) · Chewy (15%)
+  Reason:    Atlanta at 2.7 days supply. Storm closes Memphis outbound Wednesday 8pm.
+             Walmart promo window opens Nov 15. Fill rate penalty $45/case.
 
-Amazon and Chewy have lower exposure at crisis DCs. Their primary volumes run through Chicago and LA, both stable.`,
-};
+STO-002 — Review (72hr window)
+  Route:     Memphis DC → Charlotte DC
+  SKUs:      Dentastix Large (900u)
+  Mode:      FTL · 74% load
+  Cost:      $1,980 | Risk avoided: $38,200 | Rebalance Score: 74
+  Customers: Walmart (38%) · PetSmart (32%)
+  Reason:    Charlotte running 38% above plan for 4 consecutive weeks. Review before Nov 8.
 
+════════════════════════════════════════
+WEATHER & TIMING SIGNALS
+════════════════════════════════════════
+- Storm system closing Memphis outbound window: Wednesday night (~36 hours)
+- Southeast transfer window is time-critical — Atlanta and Charlotte at risk
+- No weather disruption forecast for Chicago, LA, or Dallas lanes
+
+════════════════════════════════════════
+ROOT CAUSES TO ADDRESS (longer-term)
+════════════════════════════════════════
+1. Safety stock (Dentastix Large, SE DCs): sized at Q2 velocity 1,200/wk — Atlanta now running 1,860/wk. Correct SS = ~1,430 units vs current 800.
+2. Seasonal index (SE region): Q4 index = 1.08, last updated Q2 2024. Actual Q4 velocity implies 1.55. Affects Atlanta, Charlotte, Chicago.
+3. LA overstock (Cesar Softies): 8,120 units at 79.8 days supply. Shelf life 330 days remaining — write-off risk in ~5 months. Reposition 4,000 to Chicago, 2,000 to Dallas.
+4. Lead time master data (Dentastix Large): planning system shows 18 days — actual carrier performance consistently 12 days on Memphis→SE lanes.
+
+════════════════════════════════════════
+RECENT DECISION HISTORY (Value Log)
+════════════════════════════════════════
+${recentLog}
+
+════════════════════════════════════════
+NETWORK SUMMARY
+════════════════════════════════════════
+Total exposure if no action today: $221,300
+Network average fill rate: ${avgFR}%
+Retailers with units at risk: Walmart, PetSmart, Chewy (Atlanta and Charlotte)
+FTL consolidation savings available: $4,360
+Transfer source with most supply: Memphis DC (38.5 days, 16,200 units available)
+
+════════════════════════════════════════
+RESPONSE GUIDELINES
+════════════════════════════════════════
+- Be direct and specific — cite DC IDs, SKU names, unit counts, and dollar amounts
+- Lead with the most urgent risk; don't bury the headline
+- When recommending actions, state the financial case: cost vs. risk avoided vs. score
+- Use short paragraphs and line breaks — this is a decision-support tool, not a report
+- You may ask one focused clarifying question if the intent is genuinely ambiguous
+- All data is synthetic demo data — do not present it as real Mars Petcare information`;
+}
+
+// ─── Suggestions ─────────────────────────────────────────────────────────────
 const SUGGESTIONS = [
   "What's our biggest risk right now?",
   "Which retailer is most at risk?",
@@ -32,6 +110,7 @@ const SUGGESTIONS = [
   "What's the LA Cesar Softies situation?",
 ];
 
+// ─── Component ────────────────────────────────────────────────────────────────
 export default function AgentChat() {
   const [msgs, setMsgs] = useState([]);
   const [inp, setInp] = useState('');
@@ -42,13 +121,88 @@ export default function AgentChat() {
     const msg = q || inp.trim();
     if (!msg || load) return;
     setInp('');
-    setMsgs(m => [...m, { role: 'user', content: msg }]);
+
+    const nextMsgs = [...msgs, { role: 'user', content: msg }];
+    setMsgs(nextMsgs);
     setLoad(true);
-    await new Promise(r => setTimeout(r, 900 + Math.random() * 300));
-    const reply = CANNED[msg] || `I've reviewed the current network data.\n\nMemphis DC is well-positioned as the primary transfer source with 38+ days of supply. Southeast risk is concentrated at Atlanta (2.7 days critical — Walmart and PetSmart at risk) and Charlotte (9.5 days review tier). Los Angeles has an emerging Cesar Softies overstock at 79.8 days.\n\nWould you like me to focus on a specific DC, retailer, SKU, or recommended action?`;
-    setMsgs(m => [...m, { role: 'assistant', content: reply }]);
-    setLoad(false);
-    setTimeout(() => btm.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': import.meta.env.VITE_CLAUDE_API_KEY,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-5',
+          max_tokens: 1024,
+          system: buildSystemPrompt(),
+          stream: true,
+          messages: nextMsgs.map(m => ({ role: m.role, content: m.content })),
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err?.error?.message || `HTTP ${response.status}`);
+      }
+
+      // Stream the response
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let started = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') continue;
+          try {
+            const event = JSON.parse(data);
+            if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+              const text = event.delta.text;
+              if (!started) {
+                started = true;
+                setLoad(false);
+                setMsgs(m => [...m, { role: 'assistant', content: text }]);
+              } else {
+                setMsgs(m => {
+                  const updated = [...m];
+                  updated[updated.length - 1] = {
+                    role: 'assistant',
+                    content: updated[updated.length - 1].content + text,
+                  };
+                  return updated;
+                });
+              }
+            }
+          } catch {
+            // skip malformed SSE lines
+          }
+        }
+      }
+
+      if (!started) setLoad(false);
+      setTimeout(() => btm.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+
+    } catch (err) {
+      console.error('Claude API error:', err);
+      setLoad(false);
+      setMsgs(m => [...m, {
+        role: 'assistant',
+        content: `Error: ${err.message ?? 'Could not reach the API. Check VITE_CLAUDE_API_KEY in your .env file.'}`,
+      }]);
+    }
   };
 
   return (
