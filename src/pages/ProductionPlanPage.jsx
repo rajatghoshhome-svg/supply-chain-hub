@@ -12,6 +12,7 @@ const TABS = [
 
 // ─── Static fallback data (used when API is unavailable, e.g. Vercel) ────
 const STATIC_PROD_PLAN = {
+  periods: ['W13','W14','W15','W16','W17','W18'],
   plantsPlanned: 1, totalProductsPlanned: 3, strategy: 'chase',
   plantResults: [
     {
@@ -19,13 +20,24 @@ const STATIC_PROD_PLAN = {
       productPlans: [
         {
           skuCode: 'MTR-100', skuName: '1HP Standard Motor',
+          plantGrossReqs: [155,160,165,172,166,177],
           plan: {
             periods: ['W13','W14','W15','W16','W17','W18'],
             demand: [155,160,165,172,166,177],
             strategies: {
-              chase: { production: [155,160,165,172,166,177], inventory: [0,0,0,0,0,0], workforce: [18,19,19,20,19,21], cost: 142500 },
-              level: { production: [166,166,166,166,166,166], inventory: [11,17,18,12,12,1], workforce: [19,19,19,19,19,19], cost: 138200 },
-              hybrid: { production: [160,160,165,172,166,172], inventory: [5,5,5,5,5,0], workforce: [19,19,19,20,19,20], cost: 140100 },
+              chase: { production: [155,160,165,172,166,177], endingInventory: [0,0,0,0,0,0], workforce: [18,19,19,20,19,21], totalCost: 142500,
+                rccp: [
+                  { code: 'ASSY-A', hoursPerUnit: 1.2, capacityHoursPerPeriod: 240, loadHours: [186,192,198,206,199,212], utilization: [78,80,83,86,83,88], overloaded: [false,false,false,false,false,false] },
+                  { code: 'WIND-1', hoursPerUnit: 0.9, capacityHoursPerPeriod: 162, loadHours: [140,144,149,155,149,159], utilization: [86,89,92,96,92,98], overloaded: [false,false,false,false,false,false] },
+                ] },
+              level: { production: [166,166,166,166,166,166], endingInventory: [11,17,18,12,12,1], workforce: [19,19,19,19,19,19], totalCost: 138200,
+                rccp: [
+                  { code: 'ASSY-A', hoursPerUnit: 1.2, capacityHoursPerPeriod: 240, loadHours: [199,199,199,199,199,199], utilization: [83,83,83,83,83,83], overloaded: [false,false,false,false,false,false] },
+                ] },
+              hybrid: { production: [160,160,165,172,166,172], endingInventory: [5,5,5,5,5,0], workforce: [19,19,19,20,19,20], totalCost: 140100,
+                rccp: [
+                  { code: 'ASSY-A', hoursPerUnit: 1.2, capacityHoursPerPeriod: 240, loadHours: [192,192,198,206,199,206], utilization: [80,80,83,86,83,86], overloaded: [false,false,false,false,false,false] },
+                ] },
             },
             capacity: {
               workCenters: [
@@ -38,13 +50,17 @@ const STATIC_PROD_PLAN = {
         },
         {
           skuCode: 'MTR-200', skuName: '2HP Industrial Motor',
+          plantGrossReqs: [35,38,28,40,32,38],
           plan: {
             periods: ['W13','W14','W15','W16','W17','W18'],
             demand: [35,38,28,40,32,38],
             strategies: {
-              chase: { production: [35,38,28,40,32,38], inventory: [0,0,0,0,0,0], workforce: [4,5,3,5,4,5], cost: 48200 },
-              level: { production: [35,35,35,35,35,35], inventory: [0,-3,4,-1,2,-1], workforce: [4,4,4,4,4,4], cost: 46800 },
-              hybrid: { production: [35,38,30,40,32,36], inventory: [0,0,2,2,2,0], workforce: [4,5,4,5,4,4], cost: 47500 },
+              chase: { production: [35,38,28,40,32,38], endingInventory: [0,0,0,0,0,0], workforce: [4,5,3,5,4,5], totalCost: 48200,
+                rccp: [{ code: 'ASSY-B', hoursPerUnit: 1.5, capacityHoursPerPeriod: 120, loadHours: [53,57,42,60,48,57], utilization: [44,48,35,50,40,48], overloaded: [false,false,false,false,false,false] }] },
+              level: { production: [35,35,35,35,35,35], endingInventory: [0,-3,4,-1,2,-1], workforce: [4,4,4,4,4,4], totalCost: 46800,
+                rccp: [{ code: 'ASSY-B', hoursPerUnit: 1.5, capacityHoursPerPeriod: 120, loadHours: [53,53,53,53,53,53], utilization: [44,44,44,44,44,44], overloaded: [false,false,false,false,false,false] }] },
+              hybrid: { production: [35,38,30,40,32,36], endingInventory: [0,0,2,2,2,0], workforce: [4,5,4,5,4,4], totalCost: 47500,
+                rccp: [{ code: 'ASSY-B', hoursPerUnit: 1.5, capacityHoursPerPeriod: 120, loadHours: [53,57,45,60,48,54], utilization: [44,48,38,50,40,45], overloaded: [false,false,false,false,false,false] }] },
             },
             capacity: { workCenters: [
               { name: 'Assembly Line B', available: 80, used: 40, utilization: 0.500 },
@@ -53,13 +69,17 @@ const STATIC_PROD_PLAN = {
         },
         {
           skuCode: 'MTR-500', skuName: '5HP Heavy Duty Motor',
+          plantGrossReqs: [18,20,12,20,16,22],
           plan: {
             periods: ['W13','W14','W15','W16','W17','W18'],
             demand: [18,20,12,20,16,22],
             strategies: {
-              chase: { production: [18,20,12,20,16,22], inventory: [0,0,0,0,0,0], workforce: [3,3,2,3,2,3], cost: 32400 },
-              level: { production: [18,18,18,18,18,18], inventory: [0,-2,4,2,4,0], workforce: [3,3,3,3,3,3], cost: 31200 },
-              hybrid: { production: [18,20,14,20,16,20], inventory: [0,0,2,2,2,0], workforce: [3,3,2,3,2,3], cost: 31800 },
+              chase: { production: [18,20,12,20,16,22], endingInventory: [0,0,0,0,0,0], workforce: [3,3,2,3,2,3], totalCost: 32400,
+                rccp: [{ code: 'HEAVY-1', hoursPerUnit: 2.5, capacityHoursPerPeriod: 75, loadHours: [45,50,30,50,40,55], utilization: [60,67,40,67,53,73], overloaded: [false,false,false,false,false,false] }] },
+              level: { production: [18,18,18,18,18,18], endingInventory: [0,-2,4,2,4,0], workforce: [3,3,3,3,3,3], totalCost: 31200,
+                rccp: [{ code: 'HEAVY-1', hoursPerUnit: 2.5, capacityHoursPerPeriod: 75, loadHours: [45,45,45,45,45,45], utilization: [60,60,60,60,60,60], overloaded: [false,false,false,false,false,false] }] },
+              hybrid: { production: [18,20,14,20,16,20], endingInventory: [0,0,2,2,2,0], workforce: [3,3,2,3,2,3], totalCost: 31800,
+                rccp: [{ code: 'HEAVY-1', hoursPerUnit: 2.5, capacityHoursPerPeriod: 75, loadHours: [45,50,35,50,40,50], utilization: [60,67,47,67,53,67], overloaded: [false,false,false,false,false,false] }] },
             },
             capacity: { workCenters: [
               { name: 'Heavy Assembly', available: 30, used: 22, utilization: 0.733 },
