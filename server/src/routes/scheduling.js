@@ -82,6 +82,8 @@ schedulingRouter.get('/demo', (req, res) => {
     const plantWCs = plantWorkCenters[selectedPlant] || [];
     const mixingWCs = plantWCs.filter(wc => /mix|blend|roast|grind/i.test(wc.name));
     const processingWCs = plantWCs.filter(wc => /bak|form|pasteur|fill/i.test(wc.name));
+    const packingWCs = plantWCs.filter(wc => /pack|case|wrap|label/i.test(wc.name));
+    const qcWCs = plantWCs.filter(wc => /quality|qc|test|inspect/i.test(wc.name));
 
     for (const skuCode of plantProducts) {
       const grossReqs = plantGrossReqs[skuCode] || new Array(8).fill(0);
@@ -98,14 +100,31 @@ schedulingRouter.get('/demo', (req, res) => {
 
       const production = plan.strategies.chase.production;
 
-      // Assign work center based on product type
-      let assignedWC = processingWCs[0] || plantWCs[1] || plantWCs[0];
-      if (/MIX|NUT/i.test(skuCode)) {
-        assignedWC = mixingWCs[0] || assignedWC;
-      } else if (/BAR|CHP|CRK/i.test(skuCode)) {
-        assignedWC = processingWCs[0] || assignedWC;
-      } else if (/WAT|JCE|KMB|NRG|CLD/i.test(skuCode)) {
-        assignedWC = processingWCs[0] || mixingWCs[0] || assignedWC;
+      // Assign primary work center based on product type
+      // Each product type maps to the WC that is its bottleneck operation
+      // Goal: distribute across work centers so Gantt shows multiple rows
+      let assignedWC;
+      if (/MIX/i.test(skuCode)) {
+        assignedWC = mixingWCs[0] || plantWCs[0];
+      } else if (/NUT/i.test(skuCode)) {
+        assignedWC = mixingWCs[1] || mixingWCs[0] || plantWCs[0];
+      } else if (/BAR/i.test(skuCode)) {
+        assignedWC = processingWCs[0] || plantWCs[1] || plantWCs[0];
+      } else if (/CHP/i.test(skuCode)) {
+        assignedWC = packingWCs[0] || plantWCs[2] || plantWCs[0];
+      } else if (/CRK/i.test(skuCode)) {
+        assignedWC = qcWCs[0] || packingWCs[0] || plantWCs[3] || plantWCs[0];
+      } else if (/WAT|NRG/i.test(skuCode)) {
+        // Sparkling/energy drinks bottleneck at filling
+        assignedWC = processingWCs[0] || plantWCs[1] || plantWCs[0];
+      } else if (/JCE|CLD/i.test(skuCode)) {
+        // Juices and cold brew bottleneck at blending
+        assignedWC = mixingWCs[0] || plantWCs[0];
+      } else if (/KMB/i.test(skuCode)) {
+        // Kombucha bottleneck at pasteurization (a processing WC)
+        assignedWC = processingWCs[1] || processingWCs[0] || plantWCs[2] || plantWCs[0];
+      } else {
+        assignedWC = plantWCs[0];
       }
       const hrsPerUnit = assignedWC?.hoursPerUnit?.[family?.code] || 1.0;
 
@@ -203,6 +222,8 @@ schedulingRouter.post('/demo/analyze', async (req, res) => {
     const analyzeWCs = plantWorkCenters[selectedPlant] || [];
     const analyzeMixWCs = analyzeWCs.filter(wc => /mix|blend|roast|grind/i.test(wc.name));
     const analyzeProcWCs = analyzeWCs.filter(wc => /bak|form|pasteur|fill/i.test(wc.name));
+    const analyzePackWCs = analyzeWCs.filter(wc => /pack|case|wrap|label/i.test(wc.name));
+    const analyzeQCWCs = analyzeWCs.filter(wc => /quality|qc|test|inspect/i.test(wc.name));
     for (const skuCode of plantProducts) {
       const grossReqs = plantGrossReqs[skuCode] || new Array(8).fill(0);
       const inv = plantInventory[selectedPlant]?.[skuCode] || { onHand: 0 };
@@ -210,10 +231,16 @@ schedulingRouter.post('/demo/analyze', async (req, res) => {
       const family = productFamilies.find(f => f.products.includes(skuCode));
       const plan = runProductionPlan({ periods, grossReqs, beginningInventory: inv.onHand, costPerUnit: prod?.unitCost || 100 });
       const production = plan.strategies.chase.production;
-      let aWC = analyzeProcWCs[0] || analyzeWCs[1] || analyzeWCs[0];
-      if (/MIX|NUT/i.test(skuCode)) aWC = analyzeMixWCs[0] || aWC;
-      else if (/BAR|CHP|CRK/i.test(skuCode)) aWC = analyzeProcWCs[0] || aWC;
-      else if (/WAT|JCE|KMB|NRG|CLD/i.test(skuCode)) aWC = analyzeProcWCs[0] || analyzeMixWCs[0] || aWC;
+      let aWC;
+      if (/MIX/i.test(skuCode)) aWC = analyzeMixWCs[0] || analyzeWCs[0];
+      else if (/NUT/i.test(skuCode)) aWC = analyzeMixWCs[1] || analyzeMixWCs[0] || analyzeWCs[0];
+      else if (/BAR/i.test(skuCode)) aWC = analyzeProcWCs[0] || analyzeWCs[1] || analyzeWCs[0];
+      else if (/CHP/i.test(skuCode)) aWC = analyzePackWCs[0] || analyzeWCs[2] || analyzeWCs[0];
+      else if (/CRK/i.test(skuCode)) aWC = analyzeQCWCs[0] || analyzePackWCs[0] || analyzeWCs[3] || analyzeWCs[0];
+      else if (/WAT|NRG/i.test(skuCode)) aWC = analyzeProcWCs[0] || analyzeWCs[1] || analyzeWCs[0];
+      else if (/JCE|CLD/i.test(skuCode)) aWC = analyzeMixWCs[0] || analyzeWCs[0];
+      else if (/KMB/i.test(skuCode)) aWC = analyzeProcWCs[1] || analyzeProcWCs[0] || analyzeWCs[2] || analyzeWCs[0];
+      else aWC = analyzeWCs[0];
       const hrsPerUnit = aWC?.hoursPerUnit?.[family?.code] || 1.0;
       for (let i = 0; i < periods.length; i++) {
         if (production[i] > 0) {
@@ -354,10 +381,18 @@ schedulingRouter.put('/resequence', (req, res) => {
         const rWCs = plantWorkCenters[plant] || [];
         const rMixWCs = rWCs.filter(wc => /mix|blend|roast|grind/i.test(wc.name));
         const rProcWCs = rWCs.filter(wc => /bak|form|pasteur|fill/i.test(wc.name));
-        let rWC = rProcWCs[0] || rWCs[1] || rWCs[0];
-        if (/MIX|NUT/i.test(skuCode)) rWC = rMixWCs[0] || rWC;
-        else if (/BAR|CHP|CRK/i.test(skuCode)) rWC = rProcWCs[0] || rWC;
-        else if (/WAT|JCE|KMB|NRG|CLD/i.test(skuCode)) rWC = rProcWCs[0] || rMixWCs[0] || rWC;
+        const rPackWCs = rWCs.filter(wc => /pack|case|wrap|label/i.test(wc.name));
+        const rQCWCs = rWCs.filter(wc => /quality|qc|test|inspect/i.test(wc.name));
+        let rWC;
+        if (/MIX/i.test(skuCode)) rWC = rMixWCs[0] || rWCs[0];
+        else if (/NUT/i.test(skuCode)) rWC = rMixWCs[1] || rMixWCs[0] || rWCs[0];
+        else if (/BAR/i.test(skuCode)) rWC = rProcWCs[0] || rWCs[1] || rWCs[0];
+        else if (/CHP/i.test(skuCode)) rWC = rPackWCs[0] || rWCs[2] || rWCs[0];
+        else if (/CRK/i.test(skuCode)) rWC = rQCWCs[0] || rPackWCs[0] || rWCs[3] || rWCs[0];
+        else if (/WAT|NRG/i.test(skuCode)) rWC = rProcWCs[0] || rWCs[1] || rWCs[0];
+        else if (/JCE|CLD/i.test(skuCode)) rWC = rMixWCs[0] || rWCs[0];
+        else if (/KMB/i.test(skuCode)) rWC = rProcWCs[1] || rProcWCs[0] || rWCs[2] || rWCs[0];
+        else rWC = rWCs[0];
         const hrsPerUnit = rWC?.hoursPerUnit?.[family?.code] || 1.0;
         for (let i = 0; i < periods.length; i++) {
           if (production[i] > 0) {
