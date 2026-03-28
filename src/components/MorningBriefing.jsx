@@ -158,10 +158,17 @@ const STATIC_BRIEFING = {
       { sku: 'RAW-ALU', name: 'Aluminum Sheet', plant: 'PLANT-SOUTH', message: 'Shortage in period 5' },
     ],
   },
+  financialImpact: {
+    expediteCosts: 1600,
+    stockoutRisk: 5000,
+    inventoryCarrying: 6828,
+    overtimeCosts: 2400,
+    total: 15828,
+  },
   attentionItems: [
-    { severity: 'critical', module: 'MRP', message: '2 critical MRP exceptions — material shortages may halt production' },
-    { severity: 'warning', module: 'DRP', message: '4 DRP warnings — safety stock violations at DC-WEST and DC-CENTRAL' },
-    { severity: 'warning', module: 'Scheduling', message: '2 late orders across 2 plants — review scheduling rules' },
+    { severity: 'critical', module: 'MRP', message: '2 critical MRP exceptions — material shortages may halt production', financialImpact: '$5,000 stockout risk' },
+    { severity: 'warning', module: 'DRP', message: '4 DRP warnings — safety stock violations at DC-WEST and DC-CENTRAL', financialImpact: '$800 expedite cost' },
+    { severity: 'warning', module: 'Scheduling', message: '2 late orders across 2 plants — review scheduling rules', financialImpact: '$2,400 overtime risk' },
   ],
 };
 
