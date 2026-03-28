@@ -1,4 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { T } from '../styles/tokens';
 import {
   networkLocations,
@@ -8,105 +10,52 @@ import {
   suppliers,
 } from '../../server/src/data/synthetic-network.js';
 
-// Continental US bounding box
-const LAT_MIN = 24.5;
-const LAT_MAX = 49.5;
-const LNG_MIN = -125;
-const LNG_MAX = -66;
-
-// SVG viewport
-const SVG_W = 900;
-const SVG_H = 560;
-const PAD = 40;
-
-// Equirectangular projection: lat/lng -> SVG x/y
-function project(lat, lng) {
-  const x = PAD + ((lng - LNG_MIN) / (LNG_MAX - LNG_MIN)) * (SVG_W - 2 * PAD);
-  const y = PAD + ((LAT_MAX - lat) / (LAT_MAX - LAT_MIN)) * (SVG_H - 2 * PAD);
-  return [x, y];
-}
-
 const TYPE_CONFIG = {
-  supplier: { color: '#7C3AED', label: 'Supplier', shape: 'triangle' },
-  plant:    { color: '#D97706', label: 'Plant',    shape: 'square' },
-  dc:       { color: '#059669', label: 'DC',       shape: 'circle' },
+  supplier: { color: '#7C3AED', label: 'Supplier', symbol: '▲' },
+  plant:    { color: '#D97706', label: 'Plant',    symbol: '■' },
+  dc:       { color: '#059669', label: 'DC',       symbol: '●' },
 };
 
-const LANE_COLORS = {
-  inbound:  'rgba(124, 58, 237, 0.18)',
-  outbound: 'rgba(5, 150, 105, 0.22)',
+const LANE_STYLES = {
+  inbound:  { color: '#7C3AED', dash: '8, 5', weight: 1.8, opacity: 0.35, hoverOpacity: 0.8, hoverWeight: 2.5 },
+  outbound: { color: '#059669', dash: null,    weight: 1.8, opacity: 0.35, hoverOpacity: 0.8, hoverWeight: 2.5 },
 };
 
-function LocationMarker({ x, y, type, code, city, state, hovered, onHover, onLeave }) {
+function createMarkerIcon(type, highlighted = false) {
   const cfg = TYPE_CONFIG[type];
-  const size = hovered ? 9 : 7;
+  const size = highlighted ? 32 : 24;
+  const fontSize = highlighted ? 16 : 12;
+  const shadow = highlighted ? '0 2px 8px rgba(0,0,0,0.3)' : '0 1px 4px rgba(0,0,0,0.2)';
 
-  let shape;
-  if (cfg.shape === 'triangle') {
-    const h = size * 1.7;
-    const pts = `${x},${y - h / 2} ${x - size},${y + h / 2} ${x + size},${y + h / 2}`;
-    shape = <polygon points={pts} fill={cfg.color} stroke={T.white} strokeWidth={1.5} />;
-  } else if (cfg.shape === 'square') {
-    shape = <rect x={x - size} y={y - size} width={size * 2} height={size * 2} rx={2} fill={cfg.color} stroke={T.white} strokeWidth={1.5} />;
-  } else {
-    shape = <circle cx={x} cy={y} r={size} fill={cfg.color} stroke={T.white} strokeWidth={1.5} />;
-  }
-
-  return (
-    <g
-      style={{ cursor: 'pointer' }}
-      onMouseEnter={() => onHover(code)}
-      onMouseLeave={onLeave}
-    >
-      {shape}
-      {hovered && (
-        <g>
-          {/* Tooltip background */}
-          <rect
-            x={x + 12}
-            y={y - 24}
-            width={Math.max((city + ', ' + state).length, code.length) * 7.2 + 16}
-            height={38}
-            rx={5}
-            fill={T.ink}
-            opacity={0.92}
-          />
-          <text x={x + 20} y={y - 8} fontFamily="Sora" fontSize={11} fontWeight={600} fill={T.white}>
-            {code}
-          </text>
-          <text x={x + 20} y={y + 6} fontFamily="JetBrains Mono" fontSize={9.5} fill="rgba(255,255,255,0.7)">
-            {city}, {state}
-          </text>
-        </g>
-      )}
-    </g>
-  );
+  return L.divIcon({
+    className: '',
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -size / 2 - 4],
+    html: `<div style="
+      width:${size}px; height:${size}px;
+      display:flex; align-items:center; justify-content:center;
+      font-size:${fontSize}px; color:${cfg.color};
+      background:white; border:2px solid ${cfg.color};
+      border-radius:${type === 'dc' ? '50%' : type === 'plant' ? '4px' : '50%'};
+      box-shadow:${shadow};
+      transition: all 0.15s ease;
+      cursor:pointer;
+    ">${cfg.symbol}</div>`,
+  });
 }
-
-// Simplified US continental border outline (generalized path)
-const US_OUTLINE = `M 68,155 L 73,140 82,128 95,120 108,115 120,108 130,96 142,88 158,84 175,82
-  190,78 210,74 230,72 250,72 268,74 285,78 300,76 315,72 330,68 345,64
-  360,60 375,58 390,56 410,55 430,54 450,55 468,58 485,62 500,58 515,52
-  530,48 545,46 560,48 575,52 590,56 605,58 618,54 632,50 648,48 665,50
-  680,55 695,58 710,60 725,62 740,66 755,72 768,78 778,86 785,96 790,108
-  795,118 798,130 800,142 802,156 800,170 795,185 788,198 780,210 775,225
-  778,240 782,255 785,268 780,282 772,295 762,308 750,318 738,330 725,340
-  715,348 705,358 698,370 695,382 690,395 682,405 670,412 655,415 640,420
-  625,428 610,435 595,440 578,442 560,440 545,435 530,432 515,435 498,438
-  480,442 462,445 445,448 428,450 410,452 392,450 375,448 358,445 340,442
-  322,440 305,438 288,435 270,432 252,430 235,432 218,435 200,438 182,442
-  165,445 148,448 132,452 118,456 105,460 92,458 82,452 75,442 70,428
-  68,412 65,395 62,378 60,360 58,342 56,325 55,308 56,290 58,272 60,255
-  62,238 64,220 66,202 66,185 67,170 68,155 Z`;
 
 export default function NetworkMap() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [hoveredLoc, setHoveredLoc] = useState(null);
+  const mapContainerRef = useRef(null);
+  const mapRef = useRef(null);
+  const markersRef = useRef({});
+  const lanesRef = useRef([]);
 
   useEffect(() => {
-    // Try API first; fall back to static import (works on Vercel without backend)
     fetch('/api/network/topology')
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -114,11 +63,12 @@ export default function NetworkMap() {
       })
       .then(d => { setData(d); setLoading(false); })
       .catch(() => {
-        // Use static data import — same source of truth, just bundled
-        const supplierList = Object.entries(suppliers).map(([code, s]) => {
-          const loc = networkLocations.find(l => l.code === code);
-          return { code, ...s, ...(loc ? { lat: loc.lat, lng: loc.lng, city: loc.city, state: loc.state } : {}) };
-        });
+        const supplierList = typeof suppliers === 'object' && suppliers
+          ? Object.entries(suppliers).map(([code, s]) => {
+              const loc = networkLocations.find(l => l.code === code);
+              return { code, ...s, ...(loc ? { lat: loc.lat, lng: loc.lng, city: loc.city, state: loc.state } : {}) };
+            })
+          : [];
         setData({
           locations: networkLocations,
           lanes: networkLanes,
@@ -130,17 +80,142 @@ export default function NetworkMap() {
       });
   }, []);
 
-  // Build location lookup for lane drawing
+  // Build location lookup
   const locationMap = useMemo(() => {
     if (!data) return {};
     return Object.fromEntries(data.locations.map(l => [l.code, l]));
   }, [data]);
 
+  // Initialize Leaflet map
+  useEffect(() => {
+    if (!data || !mapContainerRef.current || mapRef.current) return;
+
+    const map = L.map(mapContainerRef.current, {
+      zoomControl: false,
+      attributionControl: false,
+      scrollWheelZoom: false,
+      dragging: true,
+      doubleClickZoom: false,
+    });
+
+    // CartoDB Positron — clean, professional, free, no API key
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      subdomains: 'abcd',
+      maxZoom: 19,
+    }).addTo(map);
+
+    // Small zoom control bottom-right
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+    // Attribution bottom-left, minimal
+    L.control.attribution({ position: 'bottomleft', prefix: false })
+      .addAttribution('© <a href="https://carto.com">CARTO</a> © <a href="https://osm.org">OSM</a>')
+      .addTo(map);
+
+    // Draw lanes
+    const { locations, lanes } = data;
+    const locLookup = Object.fromEntries(locations.map(l => [l.code, l]));
+
+    lanes.forEach(lane => {
+      const src = locLookup[lane.source];
+      const dst = locLookup[lane.dest];
+      if (!src || !dst) return;
+
+      const style = LANE_STYLES[lane.laneType] || LANE_STYLES.outbound;
+      const polyline = L.polyline(
+        [[src.lat, src.lng], [dst.lat, dst.lng]],
+        {
+          color: style.color,
+          weight: style.weight,
+          opacity: style.opacity,
+          dashArray: style.dash,
+          className: '',
+        }
+      ).addTo(map);
+
+      lanesRef.current.push({
+        polyline,
+        source: lane.source,
+        dest: lane.dest,
+        laneType: lane.laneType,
+      });
+    });
+
+    // Draw markers on top
+    locations.forEach(loc => {
+      const marker = L.marker([loc.lat, loc.lng], {
+        icon: createMarkerIcon(loc.type),
+        zIndexOffset: loc.type === 'dc' ? 300 : loc.type === 'plant' ? 200 : 100,
+      }).addTo(map);
+
+      // Tooltip
+      const cfg = TYPE_CONFIG[loc.type];
+      marker.bindTooltip(
+        `<div style="font-family:Sora,sans-serif;font-size:12px;font-weight:600;color:${T.ink};margin-bottom:2px">${loc.code}</div>
+         <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:${T.inkMid}">${loc.city}, ${loc.state}</div>
+         <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:${cfg.color};margin-top:3px">${cfg.label}${loc.weeklyCapacity ? ` · ${loc.weeklyCapacity} units/wk` : ''}</div>`,
+        {
+          direction: 'top',
+          offset: [0, -14],
+          className: 'network-map-tooltip',
+        }
+      );
+
+      marker.on('mouseover', () => {
+        setHoveredLoc(loc.code);
+      });
+      marker.on('mouseout', () => {
+        setHoveredLoc(null);
+      });
+
+      markersRef.current[loc.code] = { marker, type: loc.type };
+    });
+
+    // Fit bounds to all locations with padding
+    const bounds = L.latLngBounds(locations.map(l => [l.lat, l.lng]));
+    map.fitBounds(bounds, { padding: [40, 40] });
+
+    mapRef.current = map;
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      markersRef.current = {};
+      lanesRef.current = [];
+    };
+  }, [data]);
+
+  // Update lane + marker styles on hover
+  useEffect(() => {
+    // Update lanes
+    lanesRef.current.forEach(({ polyline, source, dest, laneType }) => {
+      const style = LANE_STYLES[laneType] || LANE_STYLES.outbound;
+      const isHighlighted = hoveredLoc && (hoveredLoc === source || hoveredLoc === dest);
+
+      polyline.setStyle({
+        weight: isHighlighted ? style.hoverWeight : style.weight,
+        opacity: isHighlighted ? style.hoverOpacity : style.opacity,
+      });
+
+      if (isHighlighted) {
+        polyline.bringToFront();
+      }
+    });
+
+    // Update markers
+    Object.entries(markersRef.current).forEach(([code, { marker, type }]) => {
+      const isHighlighted = hoveredLoc === code;
+      marker.setIcon(createMarkerIcon(type, isHighlighted));
+      if (isHighlighted) marker.setZIndexOffset(1000);
+      else marker.setZIndexOffset(type === 'dc' ? 300 : type === 'plant' ? 200 : 100);
+    });
+  }, [hoveredLoc]);
+
   if (loading) {
     return (
       <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: '24px 28px' }}>
         <div style={{ fontFamily: 'Sora', fontWeight: 600, fontSize: 15, color: T.ink, marginBottom: 16 }}>Distribution Network</div>
-        <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', background: T.bg, borderRadius: 8 }}>
           <span style={{ fontFamily: 'JetBrains Mono', fontSize: 12, color: T.inkLight }}>Loading network topology...</span>
         </div>
       </div>
@@ -159,12 +234,6 @@ export default function NetworkMap() {
   }
 
   const { locations, lanes } = data;
-
-  // Separate by type for layering (draw lanes first, then markers)
-  const sortedLocations = [...locations].sort((a, b) => {
-    const order = { supplier: 0, plant: 1, dc: 2 };
-    return (order[a.type] ?? 3) - (order[b.type] ?? 3);
-  });
 
   return (
     <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: '24px 28px' }}>
@@ -186,123 +255,41 @@ export default function NetworkMap() {
         <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
           {Object.entries(TYPE_CONFIG).map(([type, cfg]) => (
             <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <svg width={14} height={14} viewBox="0 0 14 14">
-                {cfg.shape === 'triangle' && (
-                  <polygon points="7,2 2,12 12,12" fill={cfg.color} />
-                )}
-                {cfg.shape === 'square' && (
-                  <rect x={2} y={2} width={10} height={10} rx={1.5} fill={cfg.color} />
-                )}
-                {cfg.shape === 'circle' && (
-                  <circle cx={7} cy={7} r={5} fill={cfg.color} />
-                )}
-              </svg>
+              <span style={{ color: cfg.color, fontSize: 14, fontWeight: 700 }}>{cfg.symbol}</span>
               <span style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkMid, letterSpacing: 0.5 }}>
                 {cfg.label}
               </span>
             </div>
           ))}
+          <div style={{ width: 1, height: 14, background: T.border }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <svg width={20} height={14} viewBox="0 0 20 14">
-              <line x1={0} y1={7} x2={20} y2={7} stroke={T.inkGhost} strokeWidth={1.5} strokeDasharray="3,2" />
+            <svg width={20} height={8} viewBox="0 0 20 8">
+              <line x1={0} y1={4} x2={20} y2={4} stroke="#7C3AED" strokeWidth={1.5} strokeDasharray="4,3" />
             </svg>
-            <span style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkMid, letterSpacing: 0.5 }}>Lane</span>
+            <span style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkMid, letterSpacing: 0.5 }}>Inbound</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <svg width={20} height={8} viewBox="0 0 20 8">
+              <line x1={0} y1={4} x2={20} y2={4} stroke="#059669" strokeWidth={1.5} />
+            </svg>
+            <span style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkMid, letterSpacing: 0.5 }}>Outbound</span>
           </div>
         </div>
       </div>
 
-      {/* Map SVG */}
-      <div style={{ position: 'relative', width: '100%', overflow: 'hidden' }}>
-        <svg
-          viewBox={`0 0 ${SVG_W} ${SVG_H}`}
-          style={{ width: '100%', height: 'auto', display: 'block' }}
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          {/* Background */}
-          <rect width={SVG_W} height={SVG_H} fill={T.bg} rx={8} />
+      {/* Leaflet Map */}
+      <div
+        ref={mapContainerRef}
+        style={{
+          width: '100%',
+          height: 420,
+          borderRadius: 8,
+          overflow: 'hidden',
+          border: `1px solid ${T.border}`,
+        }}
+      />
 
-          {/* Subtle grid */}
-          {Array.from({ length: 11 }, (_, i) => {
-            const x = PAD + (i / 10) * (SVG_W - 2 * PAD);
-            return <line key={`vg${i}`} x1={x} y1={PAD} x2={x} y2={SVG_H - PAD} stroke={T.border} strokeWidth={0.5} opacity={0.5} />;
-          })}
-          {Array.from({ length: 7 }, (_, i) => {
-            const y = PAD + (i / 6) * (SVG_H - 2 * PAD);
-            return <line key={`hg${i}`} x1={PAD} y1={y} x2={SVG_W - PAD} y2={y} stroke={T.border} strokeWidth={0.5} opacity={0.5} />;
-          })}
-
-          {/* US outline */}
-          <path
-            d={US_OUTLINE}
-            fill="none"
-            stroke={T.borderMid}
-            strokeWidth={1.2}
-            opacity={0.45}
-            transform={`translate(${PAD - 20}, ${PAD - 30}) scale(${(SVG_W - 2 * PAD + 40) / 860}, ${(SVG_H - 2 * PAD + 60) / 510})`}
-          />
-
-          {/* Lanes */}
-          {lanes.map((lane, i) => {
-            const src = locationMap[lane.source];
-            const dst = locationMap[lane.dest];
-            if (!src || !dst) return null;
-            const [x1, y1] = project(src.lat, src.lng);
-            const [x2, y2] = project(dst.lat, dst.lng);
-            const isHighlighted = hoveredLoc === lane.source || hoveredLoc === lane.dest;
-            return (
-              <line
-                key={`lane-${i}`}
-                x1={x1} y1={y1} x2={x2} y2={y2}
-                stroke={isHighlighted ? (lane.laneType === 'inbound' ? '#7C3AED' : '#059669') : (LANE_COLORS[lane.laneType] || T.inkGhost)}
-                strokeWidth={isHighlighted ? 2 : 1}
-                opacity={isHighlighted ? 0.7 : 0.4}
-                strokeDasharray={lane.laneType === 'inbound' ? '6,3' : 'none'}
-              />
-            );
-          })}
-
-          {/* Location markers */}
-          {sortedLocations.map(loc => {
-            const [x, y] = project(loc.lat, loc.lng);
-            return (
-              <LocationMarker
-                key={loc.code}
-                x={x}
-                y={y}
-                type={loc.type}
-                code={loc.code}
-                city={loc.city}
-                state={loc.state}
-                hovered={hoveredLoc === loc.code}
-                onHover={setHoveredLoc}
-                onLeave={() => setHoveredLoc(null)}
-              />
-            );
-          })}
-
-          {/* Permanent labels (small, below markers) */}
-          {sortedLocations.map(loc => {
-            const [x, y] = project(loc.lat, loc.lng);
-            if (hoveredLoc === loc.code) return null; // tooltip replaces label
-            return (
-              <text
-                key={`label-${loc.code}`}
-                x={x}
-                y={y + 18}
-                textAnchor="middle"
-                fontFamily="JetBrains Mono"
-                fontSize={8}
-                fill={T.inkLight}
-                pointerEvents="none"
-              >
-                {loc.city}
-              </text>
-            );
-          })}
-        </svg>
-      </div>
-
-      {/* Bottom info row */}
+      {/* Bottom info */}
       <div style={{
         marginTop: 12,
         display: 'flex',
@@ -311,16 +298,49 @@ export default function NetworkMap() {
         borderTop: `1px solid ${T.border}`,
       }}>
         <div style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkLight }}>
-          <span style={{ color: '#7C3AED' }}>---</span> Inbound (supplier to plant)
+          <span style={{ color: '#7C3AED' }}>- - -</span> Supplier → Plant
         </div>
         <div style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkLight }}>
-          <span style={{ color: '#059669' }}>&mdash;&mdash;</span> Outbound (plant to DC)
+          <span style={{ color: '#059669' }}>&mdash;&mdash;</span> Plant → DC
         </div>
         <div style={{ flex: 1 }} />
         <div style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkGhost }}>
           Hover locations to highlight connected lanes
         </div>
       </div>
+
+      {/* Tooltip custom styles */}
+      <style>{`
+        .network-map-tooltip {
+          background: white !important;
+          border: 1px solid ${T.border} !important;
+          border-radius: 8px !important;
+          padding: 8px 12px !important;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+          font-family: 'JetBrains Mono', monospace;
+        }
+        .network-map-tooltip::before {
+          border-top-color: ${T.border} !important;
+        }
+        .leaflet-container {
+          background: ${T.bg} !important;
+          font-family: 'JetBrains Mono', monospace !important;
+        }
+        .leaflet-control-zoom a {
+          background: white !important;
+          color: ${T.ink} !important;
+          border-color: ${T.border} !important;
+          font-family: 'JetBrains Mono', monospace !important;
+        }
+        .leaflet-control-attribution {
+          font-size: 9px !important;
+          color: ${T.inkGhost} !important;
+          background: rgba(255,255,255,0.7) !important;
+        }
+        .leaflet-control-attribution a {
+          color: ${T.inkLight} !important;
+        }
+      `}</style>
     </div>
   );
 }
