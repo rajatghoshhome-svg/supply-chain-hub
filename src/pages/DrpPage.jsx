@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { T } from '../styles/tokens';
 import ModuleLayout from '../components/shared/ModuleLayout';
 import PageHeader from '../components/shared/PageHeader';
@@ -110,6 +111,7 @@ function getOnHandColor(onHand, safetyStock) {
 }
 
 export default function DrpPage() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState('requirements');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -617,7 +619,7 @@ export default function DrpPage() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                     <thead>
                       <tr style={{ borderBottom: `2px solid ${T.border}` }}>
-                        {['Severity', 'Product', 'Location', 'Type', 'Period', 'Qty', '$ Impact', 'Message', 'AI Suggestion', 'Actions'].map(h => (
+                        {['Severity', 'Product', 'Location', 'Type', 'Period', 'Qty', '$ Impact', 'Source', 'Message', 'AI Suggestion', 'Actions'].map(h => (
                           <th key={h} scope="col" style={{ textAlign: 'left', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
                         ))}
                       </tr>
@@ -642,6 +644,18 @@ export default function DrpPage() {
                           <td style={{ padding: '8px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{e.qty || '—'}</td>
                           <td style={{ padding: '8px 10px', fontFamily: 'JetBrains Mono', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', color: e.financialImpact?.type === 'cost' || e.financialImpact?.type === 'risk' ? T.risk : e.financialImpact?.type === 'cost-avoidance' || e.financialImpact?.type === 'savings' ? T.safe : T.inkMid }}>
                             {e.financialImpact ? `$${e.financialImpact.amount.toLocaleString()}` : '—'}
+                          </td>
+                          <td style={{ padding: '8px 10px' }}>
+                            <button
+                              onClick={() => navigate(`/demand?sku=${e.skuCode}`)}
+                              style={{
+                                background: 'none', border: `1px solid ${T.accent}`, borderRadius: 4,
+                                padding: '2px 8px', fontSize: 10, fontFamily: 'JetBrains Mono', color: T.accent,
+                                cursor: 'pointer', whiteSpace: 'nowrap',
+                              }}
+                            >
+                              Demand {e.locationCode ? `· ${e.locationCode}` : ''}
+                            </button>
                           </td>
                           <td style={{ padding: '8px 10px', fontSize: 12, color: T.inkMid }}>{e.message}</td>
                           <td style={{ padding: '8px 10px' }}>

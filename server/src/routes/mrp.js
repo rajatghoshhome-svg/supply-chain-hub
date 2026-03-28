@@ -244,9 +244,17 @@ mrpRouter.get('/demo', (req, res) => {
       ({ mrpResults, periods } = runFullMRP());
     }
 
-    // Attach per-exception financial impact
+    // Attach per-exception financial impact and cross-module traceability
     mrpResults.forEach(r => {
       r.exceptions = attachFinancialImpacts(r.exceptions);
+      // Add source traceability for cross-module navigation
+      r.exceptions.forEach(exc => {
+        if (!exc.sourceModule) {
+          exc.sourceModule = 'drp';
+          exc.sourcePlant = r.plantCode || plant || null;
+          exc.sourceSku = exc.skuCode || r.sku?.code || null;
+        }
+      });
     });
 
     const summary = formatMRPSummary(mrpResults);

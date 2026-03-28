@@ -330,6 +330,21 @@ cascade.registerStep(CASCADE_EVENTS.SCHEDULE_UPDATED, async (payload, context) =
       results.push({ sku: { code: rawCode, name: raw.name, level: 2 }, plantCode: pc, ...result });
     }
 
+    // Attach cross-module traceability to each exception
+    for (const r of results) {
+      // Find which DCs drove demand for this SKU through DRP
+      const sourceDCs = (payload.drpResults || [])
+        .filter(drp => drp.skuCode === r.sku?.code || drp.locations?.some(l => l.sourceCode === pc))
+        .flatMap(drp => (drp.locations || []).map(l => l.code))
+        .filter(Boolean);
+
+      for (const exc of r.exceptions) {
+        exc.sourceModule = 'drp';
+        exc.sourcePlant = pc;
+        exc.sourceDCs = [...new Set(sourceDCs)];
+      }
+    }
+
     mrpResults[pc] = {
       results,
       totalExceptions: results.reduce((s, r) => s + r.exceptions.length, 0),
