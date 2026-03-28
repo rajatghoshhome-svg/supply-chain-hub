@@ -158,4 +158,24 @@ Sortable table with mono headers (9.5px uppercase), hover row highlight (`bgDark
 - **Max width:** 1200px, centered with `margin: 0 auto`
 - **Page padding:** 24-28px vertical, 40-52px horizontal
 - **Grid:** CSS Grid for KPI rows (`repeat(N, 1fr)`) and content layouts
-- **Responsive:** Grid collapses are handled via `flexWrap: wrap` where needed
+
+## Responsive Design
+
+Three breakpoints in `src/index.css` with class-based selectors:
+
+| Breakpoint | Target | Key Changes |
+|-----------|--------|-------------|
+| `1024px` | Tablet | Side padding 24px, KPI grid 3-col, agent panel 300px |
+| `768px` | Mobile | Nav scrollable, KPI grid 2-col, agent panel hidden, tabs scrollable |
+| `640px` | Small mobile | Nav CTA hidden, KPI grid 1-col, page headers stack vertically |
+
+CSS classes: `.nav-bar`, `.nav-items`, `.nav-cta`, `.landing-kpi-grid`, `.landing-section`, `.module-content`, `.module-tab-bar`, `.module-tabs`, `.module-agent-panel`, `.module-main-content`, `.page-header`, `.decisions-header`, `.decisions-body`, `.strategy-grid`, `.mrp-exceptions-grid`, `.accuracy-grid`, `.forecast-methods`
+
+## Accessibility
+
+- **Focus:** `:focus-visible` ring (`2px solid #2D5A3D`, 2px offset) on all interactive elements
+- **Tables:** `scope="col"` on all `th` elements
+- **Charts:** `role="img"` + `aria-label` on all SVG visualizations
+- **Tabs:** `role="tablist"`, `role="tab"`, `aria-selected` on ModuleLayout tabs
+- **Loading:** `aria-live="polite"` on async content regions
+- **Touch:** Minimum 44px touch targets on all interactive elements
