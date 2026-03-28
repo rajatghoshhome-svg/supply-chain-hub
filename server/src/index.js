@@ -13,6 +13,7 @@ import { drpRouter } from './routes/drp.js';
 import { productionPlanRouter } from './routes/production-plan.js';
 import { schedulingRouter } from './routes/scheduling.js';
 import { networkRouter } from './routes/network.js';
+import { briefingRouter } from './routes/briefing.js';
 import { requestId, errorHandler } from './middleware/error-handler.js';
 
 const app = express();
@@ -36,6 +37,7 @@ app.use('/api/drp', drpRouter);
 app.use('/api/production-plan', productionPlanRouter);
 app.use('/api/scheduling', schedulingRouter);
 app.use('/api/network', networkRouter);
+app.use('/api/briefing', briefingRouter);
 
 // Error handling
 app.use(errorHandler);

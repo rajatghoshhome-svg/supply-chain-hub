@@ -336,6 +336,71 @@ mrpRouter.post('/demo/analyze', async (req, res) => {
   }
 });
 
+// ─── GET /api/mrp/bom — Plant-specific BOM tree ─────────────────
+
+mrpRouter.get('/bom', (req, res) => {
+  try {
+    const plant = req.query.plant || 'PLANT-NORTH';
+    const bom = plantBOMs[plant];
+    if (!bom) return res.status(404).json({ error: `No BOM for plant ${plant}` });
+
+    const plantProducts = getProductsForPlant(plant);
+
+    // Build tree structure: FG → children → grandchildren
+    const tree = [];
+    for (const fgCode of plantProducts) {
+      const fg = getSkuByCode(fgCode);
+      if (!fg) continue;
+
+      const children = (bom[fgCode] || []).map(child => {
+        const childSku = getSkuByCode(child.childCode);
+        const grandchildren = (bom[child.childCode] || []).map(gc => {
+          const gcSku = getSkuByCode(gc.childCode);
+          return {
+            code: gc.childCode,
+            name: gcSku?.name || gc.childCode,
+            level: gcSku?.level ?? 2,
+            qtyPer: gc.qtyPer,
+            scrapPct: gc.scrapPct,
+            leadTime: gcSku?.leadTimePeriods,
+            lotSizing: gcSku?.lotSizing?.method,
+            onHand: gcSku?.onHand,
+            safetyStock: gcSku?.safetyStock,
+          };
+        });
+
+        return {
+          code: child.childCode,
+          name: childSku?.name || child.childCode,
+          level: childSku?.level ?? 1,
+          qtyPer: child.qtyPer,
+          scrapPct: child.scrapPct,
+          leadTime: childSku?.leadTimePeriods,
+          lotSizing: childSku?.lotSizing?.method,
+          onHand: childSku?.onHand,
+          safetyStock: childSku?.safetyStock,
+          children: grandchildren,
+        };
+      });
+
+      tree.push({
+        code: fgCode,
+        name: fg.name,
+        level: 0,
+        leadTime: fg.leadTimePeriods,
+        lotSizing: fg.lotSizing?.method,
+        onHand: fg.onHand,
+        safetyStock: fg.safetyStock,
+        children,
+      });
+    }
+
+    res.json({ plant, tree, totalItems: skuMaster.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── POST /api/mrp/run — Custom data ────────────────────────────
 
 mrpRouter.post('/run', (req, res) => {

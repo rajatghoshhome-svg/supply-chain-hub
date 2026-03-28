@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import { T } from '../styles/tokens';
 import CascadeViz from '../components/CascadeViz';
 import NetworkMap from '../components/NetworkMap';
+import WhatIfTheater from '../components/WhatIfTheater';
+import MorningBriefing from '../components/MorningBriefing';
 
 const CASCADE_STEPS = [
   { module: 'demand', label: 'Demand Plan', path: '/demand', desc: 'Statistical forecasting with 5 methods, best-fit selection, accuracy metrics' },
@@ -76,6 +78,11 @@ export default function Landing() {
         </div>
       )}
 
+      {/* Morning Briefing */}
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 40px 0' }}>
+        <MorningBriefing />
+      </div>
+
       {/* ASCM Cascade Flow */}
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 40px' }}>
         <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9.5, color: T.inkLight, letterSpacing: 1.4, marginBottom: 6, textTransform: 'uppercase' }}>ASCM MPC Framework</div>
@@ -133,6 +140,11 @@ export default function Landing() {
       {/* Network Architecture — Interactive Map */}
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 40px 32px' }}>
         <NetworkMap />
+      </div>
+
+      {/* What-If Theater */}
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 40px 32px' }}>
+        <WhatIfTheater />
       </div>
 
       {/* Architecture */}

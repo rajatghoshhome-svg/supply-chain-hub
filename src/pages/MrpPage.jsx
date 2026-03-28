@@ -12,20 +12,35 @@ const TABS = [
 
 const PLANTS = ['PLANT-NORTH', 'PLANT-SOUTH', 'PLANT-WEST'];
 
+const LEVEL_COLORS = {
+  0: { bg: T.ink, text: T.white, label: 'FG' },
+  1: { bg: T.accent, text: T.white, label: 'SUB' },
+  2: { bg: T.inkLight, text: T.white, label: 'RAW' },
+};
+
 export default function MrpPage() {
   const [tab, setTab] = useState('records');
   const [data, setData] = useState(null);
+  const [bomData, setBomData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedSku, setSelectedSku] = useState(null);
   const [selectedPlant, setSelectedPlant] = useState('PLANT-NORTH');
+  const [expandedBom, setExpandedBom] = useState(new Set());
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/mrp/demo?plant=${selectedPlant}`)
-      .then(r => r.json())
-      .then(d => {
-        setData(d);
-        if (d.results?.length > 0) setSelectedSku(d.results[0].skuCode);
+    Promise.all([
+      fetch(`/api/mrp/demo?plant=${selectedPlant}`).then(r => r.json()),
+      fetch(`/api/mrp/bom?plant=${selectedPlant}`).then(r => r.json()),
+    ])
+      .then(([mrp, bom]) => {
+        setData(mrp);
+        setBomData(bom);
+        if (mrp.results?.length > 0) setSelectedSku(mrp.results[0].skuCode);
+        // Expand all FGs by default
+        const expanded = new Set();
+        bom.tree?.forEach(fg => expanded.add(fg.code));
+        setExpandedBom(expanded);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -41,20 +56,14 @@ export default function MrpPage() {
 
   const selectedResult = data?.results?.find(r => r.skuCode === selectedSku);
 
-  // BOM derived from MRP results — shows what components each SKU uses
-  // This is plant-specific: selecting a different plant shows different BOMs
-  const bomData = {};
-  if (data?.results) {
-    for (const r of data.results) {
-      if (r.level === 0 || r.level === 1) {
-        bomData[r.skuCode] = {
-          name: r.skuName || r.skuCode,
-          level: r.level,
-          children: [], // will be populated when we have BOM API
-        };
-      }
-    }
-  }
+  const toggleBomExpand = (code) => {
+    setExpandedBom(prev => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  };
 
   return (
     <ModuleLayout moduleContext="mrp" tabs={TABS} activeTab={tab} onTabChange={setTab}>
@@ -63,8 +72,8 @@ export default function MrpPage() {
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
 
         {/* Plant selector */}
-        <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
-          <span style={{ fontSize: 11, color: T.inkLight, alignSelf: 'center', marginRight: 4 }}>Plant:</span>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 16, alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: T.inkLight, marginRight: 4 }}>Plant:</span>
           {PLANTS.map(p => (
             <button
               key={p}
@@ -80,50 +89,83 @@ export default function MrpPage() {
               {p}
             </button>
           ))}
-          <span style={{ fontSize: 10, color: T.inkLight, alignSelf: 'center', marginLeft: 8 }}>
-            MRP uses plant-specific BOM — different plants may have different BOMs for the same product
+          <span style={{ fontSize: 10, color: T.inkLight, marginLeft: 8 }}>
+            Plant-specific BOM — different plants may have different BOMs for the same product
           </span>
         </div>
 
         {/* Status bar */}
         {data && (
           <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
-            <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 8, padding: '8px 16px', fontSize: 12 }}>
-              <span style={{ color: T.inkLight }}>SKUs Planned:</span> <strong>{data.skusPlanned}</strong>
-            </div>
-            <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 8, padding: '8px 16px', fontSize: 12 }}>
-              <span style={{ color: T.inkLight }}>Exceptions:</span> <strong style={{ color: data.criticalExceptions > 0 ? T.risk : T.safe }}>{data.totalExceptions}</strong>
-            </div>
-            <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 8, padding: '8px 16px', fontSize: 12 }}>
-              <span style={{ color: T.inkLight }}>Critical:</span> <strong style={{ color: T.risk }}>{data.criticalExceptions}</strong>
-            </div>
+            <StatusPill label="SKUs Planned" value={data.skusPlanned} />
+            <StatusPill label="Exceptions" value={data.totalExceptions} color={data.criticalExceptions > 0 ? T.risk : T.safe} />
+            <StatusPill label="Critical" value={data.criticalExceptions} color={data.criticalExceptions > 0 ? T.risk : T.safe} />
+            {tab === 'bom' && bomData && (
+              <StatusPill label="BOM Items" value={bomData.tree?.length || 0} />
+            )}
           </div>
         )}
 
         {/* ─── BOM Tab ─────────────────────────────────────────── */}
         {tab === 'bom' && (
-          <Card title="Bill of Materials — Electric Motor Product Line">
-            <div style={{ padding: '20px' }}>
-              {Object.entries(bomData).map(([code, item]) => (
-                <div key={code} style={{ marginBottom: 16 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                    <div style={{ width: 10, height: 10, borderRadius: 2, background: code.startsWith('MTR') ? T.ink : code.startsWith('STAT') || code.startsWith('ROT') ? T.accent : T.inkGhost }} />
-                    <span style={{ fontFamily: 'JetBrains Mono', fontSize: 13, fontWeight: 600, color: T.ink }}>{code}</span>
-                    <span style={{ fontSize: 12, color: T.inkLight }}>{item.name}</span>
-                  </div>
-                  <div style={{ paddingLeft: 24, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {item.children.map(child => (
-                      <span key={child} style={{
-                        background: T.bgDark, border: `1px solid ${T.border}`, borderRadius: 4,
-                        padding: '3px 8px', fontSize: 11, fontFamily: 'JetBrains Mono', color: T.inkMid,
-                      }}>
-                        {child}
+          <Card title={`Bill of Materials — ${selectedPlant}`}>
+            {loading ? (
+              <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>Loading BOM...</div>
+            ) : bomData?.tree ? (
+              <div style={{ padding: '12px 0' }}>
+                {/* BOM Legend */}
+                <div style={{ display: 'flex', gap: 16, padding: '0 20px 12px', borderBottom: `1px solid ${T.border}` }}>
+                  {Object.entries(LEVEL_COLORS).map(([level, cfg]) => (
+                    <div key={level} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <span style={{
+                        display: 'inline-block', padding: '1px 6px', borderRadius: 3,
+                        background: cfg.bg, color: cfg.text, fontSize: 8, fontWeight: 600,
+                        fontFamily: 'JetBrains Mono', letterSpacing: 0.5,
+                      }}>{cfg.label}</span>
+                      <span style={{ fontSize: 10, color: T.inkLight }}>
+                        {level === '0' ? 'Finished Good' : level === '1' ? 'Subassembly' : 'Raw Material'}
                       </span>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
+                  <div style={{ flex: 1 }} />
+                  <span style={{ fontSize: 10, color: T.inkGhost }}>Click to expand/collapse</span>
                 </div>
-              ))}
-            </div>
+
+                {/* BOM Tree */}
+                {bomData.tree.map(fg => (
+                  <BomNode
+                    key={fg.code}
+                    node={fg}
+                    depth={0}
+                    expanded={expandedBom}
+                    onToggle={toggleBomExpand}
+                    selectedPlant={selectedPlant}
+                  />
+                ))}
+
+                {/* Dual-source callout */}
+                {selectedPlant === 'PLANT-NORTH' && (
+                  <div style={{
+                    margin: '16px 20px 8px', padding: '10px 14px', background: T.warnBg,
+                    border: `1px solid ${T.warnBorder}`, borderRadius: 8, fontSize: 11, color: T.warn,
+                  }}>
+                    <strong>Dual-sourced:</strong> MTR-200 uses ROT-A (standard rotor) at this plant.
+                    At PLANT-SOUTH it uses ROT-B (heavy-duty) with different bearings and shaft.
+                  </div>
+                )}
+                {selectedPlant === 'PLANT-SOUTH' && (
+                  <div style={{
+                    margin: '16px 20px 8px', padding: '10px 14px', background: T.warnBg,
+                    border: `1px solid ${T.warnBorder}`, borderRadius: 8, fontSize: 11, color: T.warn,
+                  }}>
+                    <strong>Dual-sourced:</strong> MTR-200 uses ROT-B (heavy-duty rotor) at this plant.
+                    At PLANT-NORTH it uses ROT-A (standard) with different bearings and shaft.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>No BOM data available</div>
+            )}
           </Card>
         )}
 
@@ -132,7 +174,7 @@ export default function MrpPage() {
           <>
             {/* SKU selector */}
             {data && (
-              <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap' }}>
                 {data.results?.map(r => (
                   <button
                     key={r.skuCode}
@@ -141,8 +183,8 @@ export default function MrpPage() {
                       background: selectedSku === r.skuCode ? T.ink : T.white,
                       color: selectedSku === r.skuCode ? T.white : T.ink,
                       border: `1px solid ${selectedSku === r.skuCode ? T.ink : T.border}`,
-                      borderRadius: 6, padding: '5px 10px', cursor: 'pointer',
-                      fontFamily: 'JetBrains Mono', fontSize: 11, transition: 'all 0.12s',
+                      borderRadius: 6, padding: '4px 8px', cursor: 'pointer',
+                      fontFamily: 'JetBrains Mono', fontSize: 10, transition: 'all 0.12s',
                     }}
                   >
                     {r.skuCode}
@@ -161,6 +203,14 @@ export default function MrpPage() {
                 <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>Running MRP explosion...</div>
               ) : selectedResult ? (
                 <div style={{ overflowX: 'auto' }}>
+                  {/* SKU info bar */}
+                  <div style={{ padding: '10px 16px', background: T.bgDark, borderBottom: `1px solid ${T.border}`, display: 'flex', gap: 20, fontSize: 11 }}>
+                    <span><span style={{ color: T.inkLight }}>Name:</span> {selectedResult.skuName || selectedResult.skuCode}</span>
+                    <span><span style={{ color: T.inkLight }}>Level:</span> {selectedResult.level ?? '—'}</span>
+                    <span><span style={{ color: T.inkLight }}>Lead Time:</span> {selectedResult.leadTime || '—'} wk</span>
+                    <span><span style={{ color: T.inkLight }}>Lot Sizing:</span> {selectedResult.lotSizing || '—'}</span>
+                    <span><span style={{ color: T.inkLight }}>Safety Stock:</span> {selectedResult.safetyStock ?? '—'}</span>
+                  </div>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, fontFamily: 'JetBrains Mono' }}>
                     <thead>
                       <tr style={{ borderBottom: `2px solid ${T.border}` }}>
@@ -196,14 +246,15 @@ export default function MrpPage() {
           <>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
               {[
-                { label: 'Expedite', count: expCounts.expedite, color: T.risk },
-                { label: 'Reschedule In', count: expCounts['reschedule-in'], color: T.warn },
-                { label: 'Reschedule Out', count: expCounts['reschedule-out'], color: T.safe },
-                { label: 'Cancel', count: expCounts.cancel, color: T.inkLight },
+                { label: 'Expedite', count: expCounts.expedite, color: T.risk, desc: 'Need sooner than planned' },
+                { label: 'Reschedule In', count: expCounts['reschedule-in'], color: T.warn, desc: 'Move receipt earlier' },
+                { label: 'Reschedule Out', count: expCounts['reschedule-out'], color: T.safe, desc: 'Defer — demand reduced' },
+                { label: 'Cancel', count: expCounts.cancel, color: T.inkLight, desc: 'No longer needed' },
               ].map(e => (
                 <div key={e.label} style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 8, padding: '14px 16px', textAlign: 'center' }}>
                   <div style={{ fontFamily: 'Sora', fontSize: 28, fontWeight: 600, color: e.color }}>{e.count}</div>
                   <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9, color: T.inkLight, letterSpacing: 1, textTransform: 'uppercase', marginTop: 4 }}>{e.label}</div>
+                  <div style={{ fontSize: 9, color: T.inkGhost, marginTop: 2 }}>{e.desc}</div>
                 </div>
               ))}
             </div>
@@ -253,9 +304,144 @@ export default function MrpPage() {
   );
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────
+
+function StatusPill({ label, value, color }) {
+  return (
+    <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 8, padding: '8px 16px', fontSize: 12 }}>
+      <span style={{ color: T.inkLight }}>{label}:</span>{' '}
+      <strong style={{ color: color || T.ink }}>{value}</strong>
+    </div>
+  );
+}
+
 function fmt(v) {
   if (v == null) return '—';
   const n = typeof v === 'number' ? v : parseFloat(v);
   if (isNaN(n)) return '—';
   return Math.round(n * 100) / 100;
+}
+
+// ─── BOM Tree Node ────────────────────────────────────────────────
+
+function BomNode({ node, depth, expanded, onToggle, selectedPlant }) {
+  const hasChildren = node.children && node.children.length > 0;
+  const isExpanded = expanded.has(node.code);
+  const levelCfg = LEVEL_COLORS[node.level] || LEVEL_COLORS[2];
+  const isDualSource = node.code === 'MTR-200';
+
+  return (
+    <div>
+      {/* Node row */}
+      <div
+        onClick={() => hasChildren && onToggle(node.code)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: `8px 20px 8px ${20 + depth * 28}px`,
+          cursor: hasChildren ? 'pointer' : 'default',
+          borderBottom: `1px solid ${T.border}`,
+          background: depth === 0 ? T.bgDark : 'transparent',
+          transition: 'background 0.1s',
+        }}
+        onMouseEnter={e => { if (hasChildren) e.currentTarget.style.background = T.bgDark; }}
+        onMouseLeave={e => { if (depth > 0) e.currentTarget.style.background = 'transparent'; }}
+      >
+        {/* Expand/collapse indicator */}
+        <span style={{
+          width: 16, textAlign: 'center', fontSize: 10, color: T.inkLight,
+          fontFamily: 'JetBrains Mono',
+        }}>
+          {hasChildren ? (isExpanded ? '▼' : '▶') : (depth > 0 ? '└' : '')}
+        </span>
+
+        {/* Level badge */}
+        <span style={{
+          display: 'inline-block', padding: '1px 6px', borderRadius: 3,
+          background: levelCfg.bg, color: levelCfg.text,
+          fontSize: 8, fontWeight: 600, fontFamily: 'JetBrains Mono',
+          letterSpacing: 0.5, minWidth: 28, textAlign: 'center',
+        }}>
+          {levelCfg.label}
+        </span>
+
+        {/* Code */}
+        <span style={{
+          fontFamily: 'JetBrains Mono', fontSize: 12, fontWeight: 600,
+          color: T.ink, minWidth: 90,
+        }}>
+          {node.code}
+          {isDualSource && (
+            <span style={{ marginLeft: 6, fontSize: 9, color: T.warn, fontWeight: 400 }}>
+              DUAL
+            </span>
+          )}
+        </span>
+
+        {/* Name */}
+        <span style={{ fontSize: 12, color: T.inkMid, flex: 1 }}>
+          {node.name}
+        </span>
+
+        {/* Qty per (for children) */}
+        {node.qtyPer != null && (
+          <span style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkMid, minWidth: 50, textAlign: 'right' }}>
+            ×{node.qtyPer}
+          </span>
+        )}
+
+        {/* Scrap */}
+        {node.scrapPct > 0 && (
+          <span style={{
+            fontFamily: 'JetBrains Mono', fontSize: 9, color: T.warn,
+            background: T.warnBg, padding: '1px 5px', borderRadius: 3,
+          }}>
+            {node.scrapPct}% scrap
+          </span>
+        )}
+
+        {/* Lead time */}
+        <span style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkLight, minWidth: 40, textAlign: 'right' }}>
+          {node.leadTime}wk
+        </span>
+
+        {/* Lot sizing */}
+        <span style={{
+          fontFamily: 'JetBrains Mono', fontSize: 9, color: T.inkGhost,
+          minWidth: 50, textAlign: 'right',
+        }}>
+          {node.lotSizing === 'lot-for-lot' ? 'L4L' :
+           node.lotSizing === 'fixed-order-qty' ? 'FOQ' :
+           node.lotSizing === 'eoq' ? 'EOQ' :
+           node.lotSizing === 'period-order-qty' ? 'POQ' :
+           node.lotSizing || '—'}
+        </span>
+
+        {/* On hand */}
+        <span style={{
+          fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkMid,
+          minWidth: 50, textAlign: 'right',
+        }}>
+          OH:{node.onHand ?? 0}
+        </span>
+      </div>
+
+      {/* Children */}
+      {hasChildren && isExpanded && (
+        <div>
+          {node.children.map(child => (
+            <BomNode
+              key={child.code}
+              node={child}
+              depth={depth + 1}
+              expanded={expanded}
+              onToggle={onToggle}
+              selectedPlant={selectedPlant}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
