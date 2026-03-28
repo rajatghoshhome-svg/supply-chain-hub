@@ -1,5 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { T } from '../styles/tokens';
+import {
+  networkLocations,
+  networkLanes,
+  products,
+  productSourcing,
+  suppliers,
+} from '../../server/src/data/synthetic-network.js';
 
 // Continental US bounding box
 const LAT_MIN = 24.5;
@@ -99,13 +106,28 @@ export default function NetworkMap() {
   const [hoveredLoc, setHoveredLoc] = useState(null);
 
   useEffect(() => {
+    // Try API first; fall back to static import (works on Vercel without backend)
     fetch('/api/network/topology')
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
       .then(d => { setData(d); setLoading(false); })
-      .catch(e => { setError(e.message); setLoading(false); });
+      .catch(() => {
+        // Use static data import — same source of truth, just bundled
+        const supplierList = Object.entries(suppliers).map(([code, s]) => {
+          const loc = networkLocations.find(l => l.code === code);
+          return { code, ...s, ...(loc ? { lat: loc.lat, lng: loc.lng, city: loc.city, state: loc.state } : {}) };
+        });
+        setData({
+          locations: networkLocations,
+          lanes: networkLanes,
+          products,
+          productSourcing,
+          suppliers: supplierList,
+        });
+        setLoading(false);
+      });
   }, []);
 
   // Build location lookup for lane drawing
