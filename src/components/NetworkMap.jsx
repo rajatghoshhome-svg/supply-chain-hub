@@ -155,8 +155,8 @@ export default function NetworkMap() {
       });
     });
 
-    // Draw markers on top
-    locations.forEach(loc => {
+    // Draw markers on top (skip locations with missing coordinates)
+    locations.filter(loc => loc.lat != null && loc.lng != null).forEach(loc => {
       const marker = L.marker([loc.lat, loc.lng], {
         icon: createMarkerIcon(loc.type),
         zIndexOffset: loc.type === 'dc' ? 300 : loc.type === 'plant' ? 200 : 100,
@@ -186,7 +186,8 @@ export default function NetworkMap() {
     });
 
     // Fit bounds to all locations with padding
-    const bounds = L.latLngBounds(locations.map(l => [l.lat, l.lng]));
+    const validLocs = locations.filter(l => l.lat != null && l.lng != null);
+    const bounds = L.latLngBounds(validLocs.map(l => [l.lat, l.lng]));
     map.fitBounds(bounds, { padding: [40, 40] });
 
     mapRef.current = map;
