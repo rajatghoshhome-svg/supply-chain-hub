@@ -5,13 +5,21 @@ import { locationsRouter } from './routes/locations.js';
 import { skusRouter } from './routes/skus.js';
 import { customersRouter } from './routes/customers.js';
 import { aiRouter } from './routes/ai.js';
-import { errorHandler } from './middleware/error-handler.js';
+import { mrpRouter } from './routes/mrp.js';
+import { importRouter } from './routes/import.js';
+import { cascadeRouter } from './routes/cascade.js';
+import { demandRouter } from './routes/demand.js';
+import { drpRouter } from './routes/drp.js';
+import { productionPlanRouter } from './routes/production-plan.js';
+import { schedulingRouter } from './routes/scheduling.js';
+import { requestId, errorHandler } from './middleware/error-handler.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' })); // Support large CSV imports
+app.use(requestId); // Add request ID to every request
 
 // Routes
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
@@ -19,6 +27,13 @@ app.use('/api/locations', locationsRouter);
 app.use('/api/skus', skusRouter);
 app.use('/api/customers', customersRouter);
 app.use('/api/ai', aiRouter);
+app.use('/api/mrp', mrpRouter);
+app.use('/api/import', importRouter);
+app.use('/api/cascade', cascadeRouter);
+app.use('/api/demand', demandRouter);
+app.use('/api/drp', drpRouter);
+app.use('/api/production-plan', productionPlanRouter);
+app.use('/api/scheduling', schedulingRouter);
 
 // Error handling
 app.use(errorHandler);

@@ -3,95 +3,287 @@ import { T } from '../styles/tokens';
 import ModuleLayout from '../components/shared/ModuleLayout';
 import PageHeader from '../components/shared/PageHeader';
 import Card from '../components/shared/Card';
-import DataTable from '../components/shared/DataTable';
+import ForecastChart from '../components/demand/ForecastChart';
 
 const TABS = [
-  { id: 'history', label: 'Demand History' },
   { id: 'forecast', label: 'Forecast' },
+  { id: 'history', label: 'Demand History' },
   { id: 'accuracy', label: 'Accuracy' },
 ];
 
-export default function DemandPage() {
-  const [tab, setTab] = useState('history');
-  const [history, setHistory] = useState([]);
-  const [skus, setSkus] = useState([]);
-  const [locations, setLocations] = useState([]);
-  const [loading, setLoading] = useState(true);
+const API = '/api/demand';
 
+export default function DemandPage() {
+  const [tab, setTab] = useState('forecast');
+  const [skus, setSkus] = useState([]);
+  const [selectedSku, setSelectedSku] = useState('MTR-100');
+  const [demoData, setDemoData] = useState(null);
+  const [historyData, setHistoryData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Load SKU list
   useEffect(() => {
-    Promise.all([
-      fetch('/api/skus').then(r => r.json()),
-      fetch('/api/locations').then(r => r.json()),
-    ]).then(([s, l]) => {
-      setSkus(s);
-      setLocations(l);
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    fetch(`${API}/history`)
+      .then(r => r.json())
+      .then(data => setSkus(data.skus || []))
+      .catch(() => {});
   }, []);
 
-  const skuMap = Object.fromEntries(skus.map(s => [s.id, s]));
-  const locMap = Object.fromEntries(locations.map(l => [l.id, l]));
+  // Load demo forecast when SKU changes
+  useEffect(() => {
+    if (!selectedSku) return;
+    setLoading(true);
+    setError(null);
 
-  const historyColumns = [
-    { key: 'periodStart', label: 'Period', sortable: true },
-    { key: 'skuName', label: 'SKU', sortable: true },
-    { key: 'locationName', label: 'Location', sortable: true },
-    { key: 'actualQty', label: 'Actual Qty', align: 'right', sortable: true, render: v => Number(v).toLocaleString() },
-  ];
+    Promise.all([
+      fetch(`${API}/demo/${selectedSku}`).then(r => r.json()),
+      fetch(`${API}/history/${selectedSku}`).then(r => r.json()),
+    ]).then(([demo, hist]) => {
+      setDemoData(demo);
+      setHistoryData(hist);
+      setLoading(false);
+    }).catch(err => {
+      setError(err.message);
+      setLoading(false);
+    });
+  }, [selectedSku]);
 
   return (
     <ModuleLayout moduleContext="demand" tabs={TABS} activeTab={tab} onTabChange={setTab}>
       <PageHeader title="Demand Planning" subtitle="Forecast & Analyze" />
 
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
+
+        {/* SKU Selector */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+          {(skus.length > 0 ? skus : [{ skuCode: 'MTR-100', skuName: '1HP Standard Motor' }, { skuCode: 'MTR-200', skuName: '2HP Premium Motor' }, { skuCode: 'MTR-500', skuName: '5HP Industrial Motor' }]).map(s => (
+            <button
+              key={s.skuCode}
+              onClick={() => setSelectedSku(s.skuCode)}
+              style={{
+                background: selectedSku === s.skuCode ? T.ink : T.white,
+                color: selectedSku === s.skuCode ? T.white : T.ink,
+                border: `1px solid ${selectedSku === s.skuCode ? T.ink : T.border}`,
+                borderRadius: 8,
+                padding: '8px 16px',
+                cursor: 'pointer',
+                fontFamily: 'Inter',
+                fontSize: 13,
+                fontWeight: selectedSku === s.skuCode ? 500 : 400,
+                transition: 'all 0.12s',
+              }}
+            >
+              <span style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{s.skuCode}</span>
+              <span style={{ marginLeft: 6, color: selectedSku === s.skuCode ? 'rgba(255,255,255,0.7)' : T.inkLight }}>{s.skuName}</span>
+            </button>
+          ))}
+        </div>
+
+        {error && (
+          <Card>
+            <div style={{ padding: 20, color: T.risk, fontSize: 13 }}>
+              Error loading data: {error}. Make sure the server is running (<code style={{ fontFamily: 'JetBrains Mono', background: T.bgDark, padding: '2px 6px', borderRadius: 3 }}>npm run dev</code>)
+            </div>
+          </Card>
+        )}
+
+        {/* ─── Forecast Tab ────────────────────────────────────── */}
+        {tab === 'forecast' && (
+          <>
+            <Card title={`Demand Forecast — ${selectedSku}`}>
+              {loading ? (
+                <div style={{ padding: 60, textAlign: 'center', color: T.inkLight }}>Loading forecast...</div>
+              ) : demoData ? (
+                <div style={{ padding: '16px 20px' }}>
+                  {/* Method badge */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                    <span style={{ fontSize: 12, color: T.inkLight }}>Best fit:</span>
+                    <span style={{
+                      background: T.safeBg, color: T.safe, border: `1px solid ${T.safe}`,
+                      padding: '3px 10px', borderRadius: 4, fontSize: 12, fontWeight: 500, fontFamily: 'JetBrains Mono',
+                    }}>
+                      {demoData.bestMethod}
+                    </span>
+                    <span style={{ fontSize: 12, color: T.inkLight }}>
+                      MAPE: {demoData.metrics?.mape}% | MAD: {demoData.metrics?.mad}
+                    </span>
+                  </div>
+
+                  {/* Chart */}
+                  <ForecastChart
+                    historyPeriods={demoData.history?.periods}
+                    historyDemand={demoData.history?.demand}
+                    forecastPeriods={demoData.forecast?.periods}
+                    forecastDemand={demoData.forecast?.demand}
+                    fitted={demoData.fitted}
+                    method={demoData.bestMethod}
+                  />
+
+                  {/* Forecast values table */}
+                  <div style={{ marginTop: 16, overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'JetBrains Mono' }}>
+                      <thead>
+                        <tr style={{ borderBottom: `1px solid ${T.border}` }}>
+                          <th style={{ textAlign: 'left', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Period</th>
+                          <th style={{ textAlign: 'right', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Forecast</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {demoData.forecast?.periods?.map((p, i) => (
+                          <tr key={p} style={{ borderBottom: `1px solid ${T.border}` }}>
+                            <td style={{ padding: '6px 12px', color: T.inkMid }}>{p}</td>
+                            <td style={{ padding: '6px 12px', textAlign: 'right', color: T.accent, fontWeight: 500 }}>{demoData.forecast.demand[i]}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ padding: 60, textAlign: 'center', color: T.inkLight }}>Select a SKU</div>
+              )}
+            </Card>
+
+            {/* Method Comparison */}
+            {demoData?.allMethods && (
+              <Card title="Method Comparison" style={{ marginTop: 16 }}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ borderBottom: `1px solid ${T.border}` }}>
+                        {['Method', 'MAPE', 'MAD', 'Bias', 'Next 3 Periods'].map(h => (
+                          <th key={h} style={{ textAlign: h === 'Method' ? 'left' : 'right', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {demoData.allMethods.map(m => (
+                        <tr key={m.method} style={{
+                          borderBottom: `1px solid ${T.border}`,
+                          background: m.method === demoData.bestMethod ? T.safeBg : 'transparent',
+                        }}>
+                          <td style={{ padding: '8px 12px', fontFamily: 'JetBrains Mono', fontWeight: m.method === demoData.bestMethod ? 600 : 400 }}>
+                            {m.method} {m.method === demoData.bestMethod ? '★' : ''}
+                          </td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'JetBrains Mono', color: m.mape < 10 ? T.safe : m.mape < 20 ? T.warn : T.risk }}>{m.mape}%</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'JetBrains Mono' }}>{m.mad}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'JetBrains Mono', color: m.bias > 0 ? T.risk : T.safe }}>{m.bias > 0 ? '+' : ''}{m.bias}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'JetBrains Mono', color: T.inkMid }}>{m.forecast.slice(0, 3).join(', ')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            )}
+          </>
+        )}
+
+        {/* ─── History Tab ─────────────────────────────────────── */}
         {tab === 'history' && (
-          <Card title="Weekly Demand History">
+          <Card title={`Weekly Demand History — ${selectedSku}`}>
             {loading ? (
               <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>Loading...</div>
+            ) : historyData ? (
+              <div style={{ maxHeight: 500, overflowY: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ borderBottom: `1px solid ${T.border}`, position: 'sticky', top: 0, background: T.white }}>
+                      <th style={{ textAlign: 'left', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Week</th>
+                      <th style={{ textAlign: 'left', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Period</th>
+                      <th style={{ textAlign: 'right', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Demand</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyData.periods?.map((p, i) => (
+                      <tr key={p} style={{ borderBottom: `1px solid ${T.border}` }}>
+                        <td style={{ padding: '6px 12px', color: T.inkLight, fontFamily: 'JetBrains Mono', fontSize: 11 }}>{i + 1}</td>
+                        <td style={{ padding: '6px 12px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{p}</td>
+                        <td style={{ padding: '6px 12px', textAlign: 'right', fontFamily: 'JetBrains Mono', fontWeight: 500 }}>{historyData.demand[i]}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
-              <DataTable columns={historyColumns} data={[]} />
+              <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>No history available</div>
             )}
-            <div style={{ padding: '16px 20px', borderTop: `1px solid ${T.border}`, color: T.inkLight, fontSize: 12 }}>
-              Connect to database and run seed script to populate demand history. Run: <code style={{ fontFamily: 'JetBrains Mono', background: T.bgDark, padding: '2px 6px', borderRadius: 3 }}>cd server && npm run seed</code>
-            </div>
           </Card>
         )}
 
-        {tab === 'forecast' && (
-          <Card title="Demand Forecast">
-            <div style={{ padding: '40px 20px', textAlign: 'center' }}>
-              <div style={{ fontFamily: 'Sora', fontSize: 16, color: T.ink, marginBottom: 8 }}>Forecast Generation</div>
-              <p style={{ fontSize: 13, color: T.inkLight, maxWidth: 400, margin: '0 auto 16px' }}>
-                Generate statistical forecasts using moving average or exponential smoothing. AI-assisted adjustments available via the agent panel.
-              </p>
-              <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-                {['Moving Average', 'Exponential Smoothing', 'AI-Adjusted'].map(m => (
-                  <div key={m} style={{ background: T.bgDark, border: `1px solid ${T.border}`, borderRadius: 8, padding: '12px 20px', fontSize: 13, color: T.inkMid }}>
-                    {m}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Card>
-        )}
-
+        {/* ─── Accuracy Tab ────────────────────────────────────── */}
         {tab === 'accuracy' && (
-          <Card title="Forecast Accuracy Metrics">
-            <div style={{ padding: '40px 20px', textAlign: 'center' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, maxWidth: 600, margin: '0 auto' }}>
-                {[
-                  { label: 'MAPE', value: '—', desc: 'Mean Absolute Percentage Error' },
-                  { label: 'Bias', value: '—', desc: 'Forecast bias (over/under)' },
-                  { label: 'Tracking Signal', value: '—', desc: 'Cumulative error / MAD' },
-                ].map(m => (
-                  <div key={m.label} style={{ background: T.bgDark, borderRadius: 8, padding: '16px' }}>
-                    <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9, color: T.inkLight, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 6 }}>{m.label}</div>
-                    <div style={{ fontFamily: 'Sora', fontSize: 28, fontWeight: 600, color: T.ink, marginBottom: 4 }}>{m.value}</div>
-                    <div style={{ fontSize: 11, color: T.inkLight }}>{m.desc}</div>
-                  </div>
-                ))}
+          <Card title={`Forecast Accuracy — ${selectedSku}`}>
+            {loading ? (
+              <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>Loading...</div>
+            ) : demoData?.metrics ? (
+              <div style={{ padding: '24px 20px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+                  {[
+                    {
+                      label: 'MAPE',
+                      value: `${demoData.metrics.mape}%`,
+                      desc: 'Mean Absolute % Error',
+                      color: demoData.metrics.mape < 10 ? T.safe : demoData.metrics.mape < 20 ? T.warn : T.risk,
+                      rating: demoData.metrics.mape < 10 ? 'Excellent' : demoData.metrics.mape < 20 ? 'Good' : demoData.metrics.mape < 30 ? 'Fair' : 'Poor',
+                    },
+                    {
+                      label: 'MAD',
+                      value: demoData.metrics.mad,
+                      desc: 'Mean Absolute Deviation',
+                      color: T.ink,
+                    },
+                    {
+                      label: 'Bias',
+                      value: `${demoData.metrics.bias > 0 ? '+' : ''}${demoData.metrics.bias}`,
+                      desc: demoData.metrics.bias > 0 ? 'Under-forecasting' : demoData.metrics.bias < 0 ? 'Over-forecasting' : 'Balanced',
+                      color: Math.abs(demoData.metrics.bias) > 5 ? T.risk : T.safe,
+                    },
+                    {
+                      label: 'Tracking Signal',
+                      value: demoData.metrics.trackingSignal,
+                      desc: Math.abs(demoData.metrics.trackingSignal) > 4 ? 'Out of control (>±4)' : 'In control',
+                      color: Math.abs(demoData.metrics.trackingSignal) > 4 ? T.risk : T.safe,
+                    },
+                  ].map(m => (
+                    <div key={m.label} style={{ background: T.bgDark, borderRadius: 8, padding: '16px' }}>
+                      <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9, color: T.inkLight, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 6 }}>{m.label}</div>
+                      <div style={{ fontFamily: 'Sora', fontSize: 28, fontWeight: 600, color: m.color, marginBottom: 4 }}>{m.value}</div>
+                      <div style={{ fontSize: 11, color: T.inkLight }}>{m.desc}</div>
+                      {m.rating && <div style={{ fontSize: 10, color: m.color, fontWeight: 500, marginTop: 4 }}>{m.rating}</div>}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Interpretation */}
+                <div style={{ background: T.bgDark, borderRadius: 8, padding: '16px 20px', fontSize: 13, color: T.inkMid, lineHeight: 1.6 }}>
+                  <div style={{ fontWeight: 500, color: T.ink, marginBottom: 8 }}>Interpretation</div>
+                  <ul style={{ margin: 0, paddingLeft: 16 }}>
+                    <li>
+                      <strong>Method:</strong> {demoData.bestMethod} was selected as best fit based on lowest MAPE across{' '}
+                      {demoData.allMethods?.length || 0} candidates.
+                    </li>
+                    <li>
+                      <strong>Bias:</strong>{' '}
+                      {demoData.metrics.bias > 2
+                        ? 'Positive bias indicates consistent under-forecasting — consider increasing forecasts to improve service levels.'
+                        : demoData.metrics.bias < -2
+                          ? 'Negative bias indicates over-forecasting — excess inventory risk. Consider reducing forecasts.'
+                          : 'Bias is balanced — no systematic over or under-forecasting detected.'}
+                    </li>
+                    <li>
+                      <strong>Tracking Signal:</strong>{' '}
+                      {Math.abs(demoData.metrics.trackingSignal) > 4
+                        ? 'Out of control — the forecast model may need recalibration or a different method.'
+                        : 'Within ±4 control limits — the model is tracking well.'}
+                    </li>
+                  </ul>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>Run a forecast to see accuracy metrics</div>
+            )}
           </Card>
         )}
       </div>

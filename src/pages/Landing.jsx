@@ -1,75 +1,202 @@
 import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { T } from '../styles/tokens';
-import { DCS } from '../data/dcs';
-import Logo from '../components/Logo';
-import LeafletMap from '../components/LeafletMap';
-import AgentChat from '../components/AgentChat';
+import CascadeViz from '../components/CascadeViz';
+
+const CASCADE_STEPS = [
+  { module: 'demand', label: 'Demand Plan', path: '/demand', desc: 'Statistical forecasting with 5 methods, best-fit selection, accuracy metrics' },
+  { module: 'drp', label: 'DRP', path: '/drp', desc: 'Distribution requirements across 3 DCs, transit lead time netting, fair-share allocation' },
+  { module: 'production', label: 'Production Plan', path: '/production-plan', desc: 'Chase/level/hybrid strategies per plant, S&OP aggregate planning' },
+  { module: 'scheduling', label: 'Scheduling', path: '/scheduling', desc: 'SPT/EDD/CR sequencing, Gantt chart, changeover optimization' },
+  { module: 'mrp', label: 'MRP', path: '/mrp', desc: 'Plant-specific BOM explosion, gross-to-net netting, lot sizing, exception generation' },
+];
 
 export default function Landing() {
   const navigate = useNavigate();
-  const atRisk = [...new Set(DCS.flatMap(dc => dc.customers.filter(c => c.atRisk).map(c => c.name)))];
-  const avgFR = (DCS.reduce((s, dc) => s + dc.fillRate, 0) / DCS.length).toFixed(1);
+  const [stats, setStats] = useState(null);
+
+  useEffect(() => {
+    // Fetch a quick DRP demo to show live stats
+    fetch('/api/drp/demo')
+      .then(r => r.json())
+      .then(d => setStats(d))
+      .catch(() => {});
+  }, []);
 
   return (
     <div style={{ fontFamily: 'Inter', background: T.bg }}>
-      {/* KPIs */}
-      <div style={{ background: T.white, borderBottom: `1px solid ${T.border}` }}>
+
+      {/* Hero */}
+      <div style={{ background: T.white, borderBottom: `1px solid ${T.border}`, padding: '48px 40px 40px' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', borderLeft: `1px solid ${T.border}` }}>
-            {[
-              { label: 'Network Exposure',    value: '$221,300',  sub: 'if no action today',         color: T.risk },
-              { label: 'DCs in Crisis',        value: '2 of 6',    sub: 'Atlanta · Charlotte',        color: T.risk },
-              { label: 'Customer Fill Rate',   value: `${avgFR}%`, sub: 'network average',            color: T.warn },
-              { label: 'Retailers at Risk',    value: String(atRisk.length), sub: atRisk.join(' · '), color: T.risk },
-              { label: 'FTL Savings Available',value: '$4,360',    sub: 'via load consolidation',     color: T.safe },
-            ].map((m, i) => (
-              <div key={i} style={{ padding: '20px 24px', borderRight: `1px solid ${T.border}` }}>
-                <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9.5, color: T.inkLight, letterSpacing: 1.3, marginBottom: 7, textTransform: 'uppercase' }}>{m.label}</div>
-                <div style={{ fontFamily: 'Sora', fontWeight: 600, fontSize: 23, color: m.color, letterSpacing: -0.7, marginBottom: 3 }}>{m.value}</div>
-                <div style={{ fontSize: 11, color: T.inkLight }}>{m.sub}</div>
+          <div style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkLight, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8 }}>
+            AI-Native Supply Chain Planning
+          </div>
+          <h1 style={{ fontFamily: 'Sora', fontSize: 32, fontWeight: 700, color: T.ink, letterSpacing: -0.8, margin: '0 0 12px' }}>
+            End-to-End Planning Platform
+          </h1>
+          <p style={{ fontSize: 15, color: T.inkMid, maxWidth: 600, lineHeight: 1.6, margin: '0 0 24px' }}>
+            Deterministic ASCM/APICS planning engines + AI exception analysis.
+            Full cascade from demand forecast to material requirements across 3 plants,
+            3 distribution centers, and 11 products.
+          </p>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <button onClick={() => navigate('/demand')} className="bp"
+              style={{ background: T.ink, color: T.white, border: 'none', padding: '10px 24px', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 500, fontFamily: 'Sora', transition: 'opacity 0.15s' }}>
+              Start with Demand →
+            </button>
+            <button onClick={() => navigate('/drp')} className="bp"
+              style={{ background: T.white, color: T.ink, border: `1.5px solid ${T.border}`, padding: '10px 24px', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 500, fontFamily: 'Sora' }}>
+              Jump to DRP
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Live Network Stats */}
+      {stats && (
+        <div style={{ background: T.white, borderBottom: `1px solid ${T.border}` }}>
+          <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', borderLeft: `1px solid ${T.border}` }}>
+              {[
+                { label: 'Products',     value: stats.skusPlanned,       color: T.ink },
+                { label: 'DCs Planned',   value: stats.locationsPlanned,  color: T.ink },
+                { label: 'Plants',        value: stats.plantsServed || 3, color: T.ink },
+                { label: 'Exceptions',    value: stats.totalExceptions,   color: stats.totalExceptions > 0 ? T.warn : T.safe },
+                { label: 'Critical',      value: stats.criticalExceptions, color: stats.criticalExceptions > 0 ? T.risk : T.safe },
+              ].map((m, i) => (
+                <div key={i} style={{ padding: '18px 24px', borderRight: `1px solid ${T.border}` }}>
+                  <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9, color: T.inkLight, letterSpacing: 1.3, marginBottom: 6, textTransform: 'uppercase' }}>{m.label}</div>
+                  <div style={{ fontFamily: 'Sora', fontWeight: 600, fontSize: 24, color: m.color, letterSpacing: -0.5 }}>{m.value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ASCM Cascade Flow */}
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 40px' }}>
+        <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9.5, color: T.inkLight, letterSpacing: 1.4, marginBottom: 6, textTransform: 'uppercase' }}>ASCM MPC Framework</div>
+        <div style={{ fontFamily: 'Sora', fontWeight: 600, fontSize: 18, color: T.ink, letterSpacing: -0.3, marginBottom: 20 }}>Planning Cascade</div>
+
+        <div style={{ display: 'flex', gap: 0, alignItems: 'stretch' }}>
+          {CASCADE_STEPS.map((step, i) => (
+            <div key={step.module} style={{ flex: 1, display: 'flex', alignItems: 'stretch' }}>
+              <div
+                onClick={() => navigate(step.path)}
+                style={{
+                  flex: 1,
+                  background: T.white,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 10,
+                  padding: '20px 16px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = T.ink; e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.08)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.boxShadow = 'none'; }}
+              >
+                <div style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: T.accent, fontWeight: 600, marginBottom: 6 }}>
+                  {String(i + 1).padStart(2, '0')}
+                </div>
+                <div style={{ fontFamily: 'Sora', fontSize: 14, fontWeight: 600, color: T.ink, marginBottom: 8 }}>
+                  {step.label}
+                </div>
+                <div style={{ fontSize: 12, color: T.inkMid, lineHeight: 1.5, flex: 1 }}>
+                  {step.desc}
+                </div>
               </div>
-            ))}
+              {i < CASCADE_STEPS.length - 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', padding: '0 4px', color: T.inkGhost, fontSize: 18 }}>→</div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Closed loop note */}
+        <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
+          <div style={{ fontSize: 11, color: T.inkLight, fontFamily: 'JetBrains Mono', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ color: T.accent }}>⟲</span> Scheduling ↔ MRP closed loop — timing shifts feed back to MPS
           </div>
         </div>
       </div>
 
-      {/* Map */}
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '28px 40px 0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <div>
-            <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9.5, color: T.inkLight, letterSpacing: 1.4, marginBottom: 3, textTransform: 'uppercase' }}>Live Network — November 4, 2024</div>
-            <div style={{ fontFamily: 'Sora', fontWeight: 600, fontSize: 18, color: T.ink, letterSpacing: -0.4 }}>Distribution Network · Customer Exposure</div>
+      {/* Live Cascade */}
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 40px 32px' }}>
+        <CascadeViz />
+      </div>
+
+      {/* Network Architecture */}
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 40px 32px' }}>
+        <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: '24px 28px' }}>
+          <div style={{ fontFamily: 'Sora', fontWeight: 600, fontSize: 15, color: T.ink, marginBottom: 16 }}>Distribution Network</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20 }}>
+            {/* Suppliers */}
+            <div>
+              <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9, color: T.inkLight, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 10 }}>Suppliers (3)</div>
+              {['SUP-STEEL · Gary, IN', 'SUP-COPPER · Tucson, AZ', 'SUP-ELEC · San Jose, CA'].map(s => (
+                <div key={s} style={{ fontFamily: 'JetBrains Mono', fontSize: 11, color: T.inkMid, marginBottom: 6, paddingLeft: 12, borderLeft: `2px solid ${T.border}` }}>{s}</div>
+              ))}
+            </div>
+            {/* Plants */}
+            <div>
+              <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9, color: T.inkLight, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 10 }}>Plants (3)</div>
+              {[
+                'PLANT-NORTH · Chicago · MTR-100/150/200/300',
+                'PLANT-SOUTH · Houston · MTR-200/400/500/600',
+                'PLANT-WEST · Phoenix · MTR-700/800/900/1000',
+              ].map(s => (
+                <div key={s} style={{ fontFamily: 'JetBrains Mono', fontSize: 11, color: T.inkMid, marginBottom: 6, paddingLeft: 12, borderLeft: `2px solid ${T.accent}` }}>{s}</div>
+              ))}
+              <div style={{ fontSize: 10, color: T.warn, marginTop: 4, paddingLeft: 12 }}>
+                ⚠ MTR-200 dual-sourced — different BOMs per plant
+              </div>
+            </div>
+            {/* DCs */}
+            <div>
+              <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9, color: T.inkLight, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 10 }}>Distribution Centers (3)</div>
+              {['DC-EAST · Charlotte, NC', 'DC-CENTRAL · Dallas, TX', 'DC-WEST · Denver, CO'].map(s => (
+                <div key={s} style={{ fontFamily: 'JetBrains Mono', fontSize: 11, color: T.inkMid, marginBottom: 6, paddingLeft: 12, borderLeft: `2px solid ${T.safe}` }}>{s}</div>
+              ))}
+            </div>
           </div>
-          <button onClick={() => navigate('/drp')} className="bp"
-            style={{ background: T.ink, color: T.white, border: 'none', padding: '9px 20px', borderRadius: 7, cursor: 'pointer', fontSize: 13, fontWeight: 500, fontFamily: 'Sora', transition: 'opacity 0.15s' }}>
-            Open Workflow
-          </button>
-        </div>
-        <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}>
-          <div style={{ padding: '12px 20px', borderBottom: `1px solid ${T.border}`, display: 'flex', justifyContent: 'space-between' }}>
-            <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9.5, color: T.inkLight, letterSpacing: 1.3, textTransform: 'uppercase' }}>Hover any DC to see customer order detail</div>
-            <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9.5, color: T.inkLight }}>Pie chart = customer volume mix · Click DC to open workflow</div>
-          </div>
-          <LeafletMap navigate={navigate} />
         </div>
       </div>
 
-      {/* Agent */}
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '28px 40px 40px' }}>
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9.5, color: T.inkLight, letterSpacing: 1.4, marginBottom: 3, textTransform: 'uppercase' }}>Supply Execution Agent</div>
-          <div style={{ fontFamily: 'Sora', fontWeight: 600, fontSize: 18, color: T.ink, letterSpacing: -0.4 }}>Ask anything about the network</div>
-        </div>
-        <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.06)', height: 480, display: 'flex', flexDirection: 'column' }}>
-          <AgentChat />
+      {/* Architecture */}
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 40px 32px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: '24px 28px' }}>
+            <div style={{ fontFamily: 'Sora', fontWeight: 600, fontSize: 15, color: T.ink, marginBottom: 12 }}>Deterministic Engines</div>
+            <div style={{ fontSize: 12, color: T.inkMid, lineHeight: 1.7 }}>
+              Pure JavaScript functions — no LLM nondeterminism for planning math.
+              Same answer every run. Testable, auditable, ASCM/APICS compliant.
+            </div>
+            <div style={{ fontFamily: 'JetBrains Mono', fontSize: 11, color: T.inkLight, marginTop: 12 }}>
+              209 tests · 5 engines · {'<'}200ms
+            </div>
+          </div>
+          <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: '24px 28px' }}>
+            <div style={{ fontFamily: 'Sora', fontWeight: 600, fontSize: 15, color: T.ink, marginBottom: 12 }}>AI Exception Analysis</div>
+            <div style={{ fontSize: 12, color: T.inkMid, lineHeight: 1.7 }}>
+              Claude analyzes engine output — exceptions, recommendations, root cause.
+              AI never touches the math. Structured context per module with ASCM system prompts.
+            </div>
+            <div style={{ fontFamily: 'JetBrains Mono', fontSize: 11, color: T.inkLight, marginTop: 12 }}>
+              Per-module context builders · SSE streaming · Decision logging
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Footer */}
       <div style={{ borderTop: `1px solid ${T.border}`, padding: '16px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Logo compact />
-        <div style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkGhost, letterSpacing: 0.8 }}>SUPPLY CHAIN HUB · PLANNING PLATFORM</div>
-        <div style={{ fontSize: 12, color: T.inkGhost }}>React · Claude API · Vercel</div>
+        <div style={{ fontFamily: 'Sora', fontWeight: 600, fontSize: 13, color: T.ink }}>Supply Chain Planning Platform</div>
+        <div style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkGhost, letterSpacing: 0.8 }}>ASCM MPC FRAMEWORK · E2E PLANNING</div>
+        <div style={{ fontSize: 11, color: T.inkGhost }}>React · Express · PostgreSQL · Claude API</div>
       </div>
     </div>
   );

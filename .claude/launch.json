@@ -3,9 +3,10 @@
   "configurations": [
     {
       "name": "vite-dev",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "port": 5173
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--port", "5173"],
+      "port": 5173,
+      "cwd": "/Users/raj/supply-chain-hub"
     }
   ]
 }

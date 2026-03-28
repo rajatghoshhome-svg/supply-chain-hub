@@ -23,6 +23,7 @@ export const skus = pgTable('skus', {
   name: varchar('name', { length: 200 }).notNull(),
   productFamily: varchar('product_family', { length: 100 }),
   uom: varchar('uom', { length: 20 }).default('units'),
+  abcClass: varchar('abc_class', { length: 1 }), // A, B, or C
   shelfLifeDays: integer('shelf_life_days'),
   createdAt: timestamp('created_at').defaultNow(),
 });
@@ -164,6 +165,7 @@ export const workCenters = pgTable('work_centers', {
 
 export const productionPlans = pgTable('production_plans', {
   id: serial('id').primaryKey(),
+  planRunId: integer('plan_run_id').references(() => planRuns.id),
   familyId: integer('family_id').references(() => productFamilies.id),
   workCenterId: integer('work_center_id').references(() => workCenters.id),
   periodStart: date('period_start'),
@@ -179,6 +181,7 @@ export const productionPlans = pgTable('production_plans', {
 
 export const productionOrders = pgTable('production_orders', {
   id: serial('id').primaryKey(),
+  planRunId: integer('plan_run_id').references(() => planRuns.id),
   skuId: integer('sku_id').references(() => skus.id),
   workCenterId: integer('work_center_id').references(() => workCenters.id),
   plannedStart: timestamp('planned_start'),
@@ -219,6 +222,7 @@ export const bomLines = pgTable('bom_lines', {
 
 export const mrpRecords = pgTable('mrp_records', {
   id: serial('id').primaryKey(),
+  planRunId: integer('plan_run_id').references(() => planRuns.id),
   skuId: integer('sku_id').references(() => skus.id),
   locationId: integer('location_id').references(() => locations.id),
   periodStart: date('period_start'),
@@ -239,6 +243,67 @@ export const mrpExceptions = pgTable('mrp_exceptions', {
   severity: varchar('severity', { length: 10 }),
   resolved: boolean('resolved').default(false),
   resolvedAt: timestamp('resolved_at'),
+});
+
+// ─── Plan Runs & Infrastructure ──────────────────────────────────────
+
+export const planRuns = pgTable('plan_runs', {
+  id: serial('id').primaryKey(),
+  triggeredBy: varchar('triggered_by', { length: 50 }).notNull(), // 'demand_update', 'manual', 'schedule', 'what_if'
+  status: varchar('status', { length: 20 }).default('running'), // running, complete, failed
+  isScenario: boolean('is_scenario').default(false),
+  active: boolean('active').default(false), // only one active plan at a time
+  modules: jsonb('modules'), // ['demand', 'mrp'] — which modules were touched
+  metadata: jsonb('metadata'), // trigger context, affected SKUs, etc.
+  startedAt: timestamp('started_at').defaultNow(),
+  completedAt: timestamp('completed_at'),
+});
+
+export const planningParameters = pgTable('planning_parameters', {
+  id: serial('id').primaryKey(),
+  skuId: integer('sku_id').references(() => skus.id),
+  locationId: integer('location_id').references(() => locations.id),
+  leadTimeDays: integer('lead_time_days'),
+  safetyStock: decimal('safety_stock', { precision: 12, scale: 2 }),
+  lotSizeRule: varchar('lot_size_rule', { length: 20 }).default('lot-for-lot'), // lot-for-lot, fixed-order-qty, eoq, period-order-qty
+  lotSizeValue: decimal('lot_size_value', { precision: 12, scale: 2 }), // FOQ qty, EOQ params, POQ periods
+  moq: decimal('moq', { precision: 12, scale: 2 }),
+  reorderPoint: decimal('reorder_point', { precision: 12, scale: 2 }),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => [
+  unique('planning_params_unique').on(table.skuId, table.locationId),
+]);
+
+export const dataHealthLog = pgTable('data_health_log', {
+  id: serial('id').primaryKey(),
+  tableName: varchar('table_name', { length: 50 }).notNull(),
+  recordId: integer('record_id'),
+  field: varchar('field', { length: 50 }),
+  oldValue: text('old_value'),
+  newValue: text('new_value'),
+  action: varchar('action', { length: 20 }).notNull(), // auto, flag, auto-review, block
+  rule: varchar('rule', { length: 100 }), // which validation rule triggered this
+  confidence: decimal('confidence', { precision: 5, scale: 2 }), // 0-100
+  resolved: boolean('resolved').default(false),
+  resolvedBy: varchar('resolved_by', { length: 100 }),
+  resolvedAt: timestamp('resolved_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const agentExceptions = pgTable('agent_exceptions', {
+  id: serial('id').primaryKey(),
+  planRunId: integer('plan_run_id').references(() => planRuns.id),
+  module: varchar('module', { length: 30 }).notNull(),
+  severity: varchar('severity', { length: 10 }).notNull(), // critical, warning, info
+  exceptionType: varchar('exception_type', { length: 30 }),
+  description: text('description'),
+  recommendation: text('recommendation'),
+  aiAnalysis: text('ai_analysis'), // Claude's explanation
+  userAction: varchar('user_action', { length: 20 }), // accepted, deferred, overridden
+  userNotes: text('user_notes'),
+  resolvedAt: timestamp('resolved_at'),
+  createdAt: timestamp('created_at').defaultNow(),
 });
 
 // ─── Shared / Cross-Module ──────────────────────────────────────────
