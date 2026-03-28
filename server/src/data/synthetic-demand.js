@@ -47,6 +47,70 @@ export const demandHistory = {
       base: 3, trend: 0.02, seasonAmplitude: 1, noiseAmplitude: 2, weeks: 52, seed: 3,
     }),
   },
+
+  // MTR-150: Compact motor. Steady mid-volume.
+  'MTR-150': {
+    name: '1.5HP Compact Motor',
+    weekly: generateWeeklyDemand({
+      base: 12, trend: 0.08, seasonAmplitude: 3, noiseAmplitude: 2, weeks: 52, seed: 4,
+    }),
+  },
+
+  // MTR-300: Mid-range motor. Moderate seasonality.
+  'MTR-300': {
+    name: '3HP Mid-Range Motor',
+    weekly: generateWeeklyDemand({
+      base: 10, trend: 0.06, seasonAmplitude: 4, noiseAmplitude: 2.5, weeks: 52, seed: 5,
+    }),
+  },
+
+  // MTR-400: Heavy-duty motor. Growing demand.
+  'MTR-400': {
+    name: '4HP Heavy-Duty Motor',
+    weekly: generateWeeklyDemand({
+      base: 6, trend: 0.12, seasonAmplitude: 2, noiseAmplitude: 1.5, weeks: 52, seed: 6,
+    }),
+  },
+
+  // MTR-600: High-torque motor. Stable, low volume.
+  'MTR-600': {
+    name: '6HP High-Torque Motor',
+    weekly: generateWeeklyDemand({
+      base: 4, trend: 0.03, seasonAmplitude: 1.5, noiseAmplitude: 1.5, weeks: 52, seed: 7,
+    }),
+  },
+
+  // MTR-700: Explosion-proof motor. Niche, lumpy.
+  'MTR-700': {
+    name: '7HP Explosion-Proof Motor',
+    weekly: generateWeeklyDemand({
+      base: 2, trend: 0.01, seasonAmplitude: 0.8, noiseAmplitude: 1.5, weeks: 52, seed: 8,
+    }),
+  },
+
+  // MTR-800: Marine-grade motor. Seasonal (summer peak).
+  'MTR-800': {
+    name: '8HP Marine-Grade Motor',
+    weekly: generateWeeklyDemand({
+      base: 5, trend: 0.04, seasonAmplitude: 4, noiseAmplitude: 2, weeks: 52, seed: 9,
+    }),
+  },
+
+  // MTR-900: Variable-speed motor. Growing fast.
+  'MTR-900': {
+    name: '9HP Variable-Speed Motor',
+    weekly: generateWeeklyDemand({
+      base: 3, trend: 0.18, seasonAmplitude: 1, noiseAmplitude: 1.5, weeks: 52, seed: 10,
+    }),
+  },
+
+  // MTR-1000: Ultra-heavy industrial. Very low volume, sporadic.
+  'MTR-1000': {
+    name: '10HP Ultra-Heavy Motor',
+    weekly: generateWeeklyDemand({
+      base: 1, trend: 0.01, seasonAmplitude: 0.5, noiseAmplitude: 1, weeks: 52, seed: 11,
+    }),
+  },
 };
 
 /**

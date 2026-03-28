@@ -278,7 +278,7 @@ export function bestFit({ history, periods, seasonLength = 12 }) {
         actuals: history,
         forecasts: result.fitted,
       });
-      candidates.push({ ...result, metrics, method: `ses` });
+      candidates.push({ ...result, metrics, method: `ses-α${alpha}` });
     } catch { /* skip */ }
   }
 

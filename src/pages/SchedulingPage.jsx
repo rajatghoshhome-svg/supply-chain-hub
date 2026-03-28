@@ -80,7 +80,7 @@ export default function SchedulingPage() {
           {data && (
             <>
               <StatusPill label="Orders" value={data.totalOrders} />
-              <StatusPill label="Makespan" value={`${data.makespan}h`} />
+              <StatusPill label="Makespan" value={`${Math.round(data.makespan * 10) / 10}h`} />
               <StatusPill label="Late" value={data.lateOrders} color={data.lateOrders > 0 ? T.risk : T.safe} />
             </>
           )}
@@ -168,7 +168,7 @@ export default function SchedulingPage() {
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                         <div>
                           <div style={{ fontFamily: 'JetBrains Mono', fontSize: 8, color: ruleName === rule ? 'rgba(255,255,255,0.5)' : T.inkLight, letterSpacing: 1, textTransform: 'uppercase' }}>Makespan</div>
-                          <div style={{ fontFamily: 'Sora', fontSize: 22, fontWeight: 600, color: ruleName === rule ? T.white : T.accent }}>{stats.makespan}h</div>
+                          <div style={{ fontFamily: 'Sora', fontSize: 22, fontWeight: 600, color: ruleName === rule ? T.white : T.accent }}>{Math.round(stats.makespan * 10) / 10}h</div>
                         </div>
                         <div>
                           <div style={{ fontFamily: 'JetBrains Mono', fontSize: 8, color: ruleName === rule ? 'rgba(255,255,255,0.5)' : T.inkLight, letterSpacing: 1, textTransform: 'uppercase' }}>Late Orders</div>

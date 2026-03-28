@@ -11,9 +11,10 @@ const TABS = [
 ];
 
 export default function ProductionPlanPage() {
-  const [tab, setTab] = useState('strategy');
-  const [data, setData] = useState(null);
+  const [tab, setTab] = useState('aggregate');
+  const [rawData, setRawData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [selectedPlant, setSelectedPlant] = useState(null);
   const [selectedSku, setSelectedSku] = useState(null);
   const [selectedStrategy, setSelectedStrategy] = useState('chase');
 
@@ -21,14 +22,22 @@ export default function ProductionPlanPage() {
     fetch('/api/production-plan/demo')
       .then(r => r.json())
       .then(d => {
-        setData(d);
-        if (d.results?.length > 0) setSelectedSku(d.results[0].skuCode);
+        setRawData(d);
+        if (d.plantResults?.length > 0) {
+          setSelectedPlant(d.plantResults[0].plantCode);
+          if (d.plantResults[0].productPlans?.length > 0) {
+            setSelectedSku(d.plantResults[0].productPlans[0].skuCode);
+          }
+        }
         setLoading(false);
       })
       .catch(() => setLoading(false));
   }, []);
 
-  const selectedResult = data?.results?.find(r => r.skuCode === selectedSku);
+  const currentPlant = rawData?.plantResults?.find(p => p.plantCode === selectedPlant);
+  const results = currentPlant?.productPlans || [];
+  const data = rawData ? { ...rawData, results } : null;
+  const selectedResult = results.find(r => r.skuCode === selectedSku);
   const plan = selectedResult?.plan;
   const strategy = plan?.strategies?.[selectedStrategy];
 
@@ -38,10 +47,37 @@ export default function ProductionPlanPage() {
 
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
 
+        {/* Plant selector */}
+        {rawData?.plantResults && (
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+            {rawData.plantResults.map(p => (
+              <button
+                key={p.plantCode}
+                onClick={() => {
+                  setSelectedPlant(p.plantCode);
+                  if (p.productPlans?.length > 0) setSelectedSku(p.productPlans[0].skuCode);
+                }}
+                style={{
+                  background: selectedPlant === p.plantCode ? T.ink : T.white,
+                  color: selectedPlant === p.plantCode ? T.white : T.ink,
+                  border: `1px solid ${selectedPlant === p.plantCode ? T.ink : T.border}`,
+                  borderRadius: 6, padding: '6px 14px', cursor: 'pointer',
+                  fontFamily: 'JetBrains Mono', fontSize: 11, fontWeight: 500, transition: 'all 0.12s',
+                }}
+              >
+                {p.plantCode}
+                <span style={{ marginLeft: 6, fontSize: 10, color: selectedPlant === p.plantCode ? 'rgba(255,255,255,0.6)' : T.inkLight }}>
+                  {p.productsPlanned} products
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* SKU selector */}
-        {data && (
+        {results.length > 0 && (
           <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
-            {data.results?.map(r => (
+            {results.map(r => (
               <button
                 key={r.skuCode}
                 onClick={() => setSelectedSku(r.skuCode)}
@@ -96,7 +132,7 @@ export default function ProductionPlanPage() {
                           )}
                         </div>
                         <div style={{ fontFamily: 'Sora', fontSize: 24, fontWeight: 600, color: selectedStrategy === s ? T.white : T.accent, marginBottom: 8 }}>
-                          ${st?.totalCost?.toLocaleString() || '—'}
+                          ${Math.round(st?.totalCost || 0).toLocaleString()}
                         </div>
                         <div style={{ fontSize: 11, color: selectedStrategy === s ? 'rgba(255,255,255,0.7)' : T.inkLight }}>
                           {s === 'chase' && 'Match demand exactly. Higher workforce change costs.'}
@@ -129,7 +165,7 @@ export default function ProductionPlanPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {data.periods.map((p, i) => (
+                          {rawData?.periods.map((p, i) => (
                             <tr key={p} style={{ borderBottom: `1px solid ${T.border}` }}>
                               <td style={tdStyle()}>{p}</td>
                               <td style={tdStyle('right')}>{selectedResult.plantGrossReqs[i]}</td>
@@ -158,7 +194,7 @@ export default function ProductionPlanPage() {
                               {k.replace(/([A-Z])/g, ' $1').trim()}
                             </div>
                             <div style={{ fontFamily: 'Sora', fontSize: 16, fontWeight: 600, color: v > 0 ? T.ink : T.inkGhost }}>
-                              ${v.toLocaleString()}
+                              ${Math.round(v).toLocaleString()}
                             </div>
                           </div>
                         ))}
@@ -175,11 +211,11 @@ export default function ProductionPlanPage() {
 
         {/* ─── Aggregate Plan Tab ──────────────────────────────── */}
         {tab === 'aggregate' && (
-          <Card title={`Aggregate Plan — ${selectedSku} (${selectedStrategy})`}>
+          <Card title={`Aggregate Plan — ${selectedSku || '...'} (${selectedStrategy})`}>
             {strategy ? (
               <div style={{ padding: '16px 20px' }}>
                 <ProdChart
-                  periods={data?.periods}
+                  periods={rawData?.periods}
                   demand={selectedResult?.plantGrossReqs}
                   production={strategy.production}
                   inventory={strategy.endingInventory}
@@ -193,7 +229,7 @@ export default function ProductionPlanPage() {
 
         {/* ─── Capacity (RCCP) Tab ─────────────────────────────── */}
         {tab === 'capacity' && (
-          <Card title={`Rough-Cut Capacity — ${selectedSku} (${selectedStrategy})`}>
+          <Card title={`Rough-Cut Capacity — ${selectedSku || '...'} (${selectedStrategy})`}>
             {strategy?.rccp ? (
               <div style={{ padding: '16px 20px' }}>
                 {strategy.rccp.map(wc => (
@@ -205,7 +241,7 @@ export default function ProductionPlanPage() {
                       </span>
                     </div>
                     <CapacityChart
-                      periods={data?.periods}
+                      periods={rawData?.periods}
                       loadHours={wc.loadHours}
                       capacity={wc.capacityHoursPerPeriod}
                       utilization={wc.utilization}
