@@ -127,6 +127,7 @@ briefingRouter.get('/summary', async (req, res) => {
         severity: 'critical',
         module: 'DRP',
         message: `${drpCritical} critical DRP exception${drpCritical > 1 ? 's' : ''} — potential stockouts at distribution centers`,
+        financialImpact: `$${(drpCritical * 800).toLocaleString()} expedite cost`,
       });
     }
     if (drpExceptions - drpCritical > 0) {
@@ -134,6 +135,7 @@ briefingRouter.get('/summary', async (req, res) => {
         severity: 'warning',
         module: 'DRP',
         message: `${drpExceptions - drpCritical} DRP warning${drpExceptions - drpCritical > 1 ? 's' : ''} — safety stock violations or expedite needed`,
+        financialImpact: `$${((drpExceptions - drpCritical) * 200).toLocaleString()} expedite cost`,
       });
     }
 
@@ -195,6 +197,7 @@ briefingRouter.get('/summary', async (req, res) => {
           severity: 'warning',
           module: 'Production',
           message: `${pc}: ${overloaded.length} work center${overloaded.length > 1 ? 's' : ''} over capacity — RCCP flags overload`,
+          financialImpact: `$${(overloaded.length * 600).toLocaleString()} overtime risk`,
         });
       }
     }
@@ -270,6 +273,7 @@ briefingRouter.get('/summary', async (req, res) => {
         severity: totalLateOrders > 5 ? 'critical' : 'warning',
         module: 'Scheduling',
         message: `${totalLateOrders} late order${totalLateOrders > 1 ? 's' : ''} across ${plantCount} plant${plantCount > 1 ? 's' : ''} — review scheduling rules`,
+        financialImpact: `$${(totalLateOrders * 1200).toLocaleString()} overtime risk`,
       });
     }
 
@@ -413,6 +417,7 @@ briefingRouter.get('/summary', async (req, res) => {
         severity: 'critical',
         module: 'MRP',
         message: `${totalMrpCritical} critical MRP exception${totalMrpCritical > 1 ? 's' : ''} — material shortages may halt production`,
+        financialImpact: `$${(totalMrpCritical * 2500).toLocaleString()} stockout risk`,
       });
     }
     if (totalMrpExceptions - totalMrpCritical > 0) {
@@ -422,6 +427,29 @@ briefingRouter.get('/summary', async (req, res) => {
         message: `${totalMrpExceptions - totalMrpCritical} MRP warning${totalMrpExceptions - totalMrpCritical > 1 ? 's' : ''} — review planned order timing and lot sizes`,
       });
     }
+
+    // ── 6. Financial Impact ──────────────────────────────────────
+    const financialImpact = {
+      expediteCosts: 0,
+      stockoutRisk: 0,
+      inventoryCarrying: 0,
+      overtimeCosts: 0,
+      total: 0,
+    };
+
+    // Expedite costs: $800 per critical DRP exception, $200 per warning
+    financialImpact.expediteCosts = drpCritical * 800 + (drpExceptions - drpCritical) * 200;
+
+    // Stockout risk: $2,500 per critical MRP shortage
+    financialImpact.stockoutRisk = totalMrpCritical * 2500;
+
+    // Inventory carrying: estimate based on total forecast × $12 unit cost × 2% weekly
+    financialImpact.inventoryCarrying = Math.round(totalForecast * 12 * 0.02);
+
+    // Overtime: $1,200 per late order
+    financialImpact.overtimeCosts = totalLateOrders * 1200;
+
+    financialImpact.total = financialImpact.expediteCosts + financialImpact.stockoutRisk + financialImpact.inventoryCarrying + financialImpact.overtimeCosts;
 
     // ── Assemble response ──────────────────────────────────────
 
@@ -465,6 +493,7 @@ briefingRouter.get('/summary', async (req, res) => {
         critical: totalMrpCritical,
         topShortages: topShortages.slice(0, 5),
       },
+      financialImpact,
       attentionItems,
     });
   } catch (err) {

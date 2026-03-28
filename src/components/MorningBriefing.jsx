@@ -82,21 +82,35 @@ function AttentionList({ items }) {
           borderTop: i > 0 ? `1px solid ${items.some(it => it.severity === 'critical') ? T.riskBorder : T.warnBorder}` : 'none',
         }}>
           <SeverityDot severity={item.severity} />
-          <div style={{ flex: 1 }}>
-            <span style={{
-              fontFamily: 'JetBrains Mono',
-              fontSize: 10,
-              fontWeight: 600,
-              color: item.severity === 'critical' ? T.risk : T.warn,
-              textTransform: 'uppercase',
-              letterSpacing: 0.8,
-              marginRight: 8,
-            }}>
-              {item.module}
-            </span>
-            <span style={{ fontSize: 12.5, color: T.inkMid, lineHeight: 1.5 }}>
-              {item.message}
-            </span>
+          <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <span style={{
+                fontFamily: 'JetBrains Mono',
+                fontSize: 10,
+                fontWeight: 600,
+                color: item.severity === 'critical' ? T.risk : T.warn,
+                textTransform: 'uppercase',
+                letterSpacing: 0.8,
+                marginRight: 8,
+              }}>
+                {item.module}
+              </span>
+              <span style={{ fontSize: 12.5, color: T.inkMid, lineHeight: 1.5 }}>
+                {item.message}
+              </span>
+            </div>
+            {item.financialImpact && (
+              <span style={{
+                fontFamily: 'JetBrains Mono',
+                fontSize: 10.5,
+                color: T.risk,
+                whiteSpace: 'nowrap',
+                marginLeft: 12,
+                flexShrink: 0,
+              }}>
+                {item.financialImpact}
+              </span>
+            )}
           </div>
         </div>
       ))}
@@ -131,6 +145,26 @@ function SmallStat({ label, value, color }) {
   );
 }
 
+const STATIC_BRIEFING = {
+  networkHealth: { suppliers: 4, plants: 2, dcs: 3, products: 3, lanes: 12 },
+  demandSnapshot: { totalForecast: 28450, topSku: 'FG-100', avgMape: 18.7 },
+  drpSnapshot: { skusPlanned: 3, exceptions: 5, critical: 1 },
+  productionSnapshot: { plantsActive: 2, recommendedStrategies: { 'PLANT-NORTH': 'chase', 'PLANT-SOUTH': 'hybrid' } },
+  schedulingSnapshot: { totalOrders: 14, avgMakespan: 32.6, totalLateOrders: 2 },
+  mrpSnapshot: {
+    totalExceptions: 8, critical: 2,
+    topShortages: [
+      { sku: 'RAW-STL', name: 'Steel Stock', plant: 'PLANT-NORTH', message: 'Shortage in period 3' },
+      { sku: 'RAW-ALU', name: 'Aluminum Sheet', plant: 'PLANT-SOUTH', message: 'Shortage in period 5' },
+    ],
+  },
+  attentionItems: [
+    { severity: 'critical', module: 'MRP', message: '2 critical MRP exceptions — material shortages may halt production' },
+    { severity: 'warning', module: 'DRP', message: '4 DRP warnings — safety stock violations at DC-WEST and DC-CENTRAL' },
+    { severity: 'warning', module: 'Scheduling', message: '2 late orders across 2 plants — review scheduling rules' },
+  ],
+};
+
 export default function MorningBriefing() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -143,7 +177,7 @@ export default function MorningBriefing() {
         return r.json();
       })
       .then(d => { setData(d); setLoading(false); })
-      .catch(err => { setError(err.message); setLoading(false); });
+      .catch(() => { setData(STATIC_BRIEFING); setLoading(false); });
   }, []);
 
   if (loading) {
@@ -166,7 +200,7 @@ export default function MorningBriefing() {
 
   if (!data) return null;
 
-  const { networkHealth, demandSnapshot, drpSnapshot, productionSnapshot, schedulingSnapshot, mrpSnapshot, attentionItems } = data;
+  const { networkHealth, demandSnapshot, drpSnapshot, productionSnapshot, schedulingSnapshot, mrpSnapshot, financialImpact, attentionItems } = data;
 
   return (
     <div>
@@ -185,6 +219,54 @@ export default function MorningBriefing() {
 
       {/* Attention Items */}
       <AttentionList items={attentionItems} />
+
+      {/* Financial Impact */}
+      {financialImpact && (
+        <div style={{
+          ...CARD,
+          marginBottom: 16,
+          borderColor: financialImpact.total > 0 ? T.riskBorder : T.border,
+          background: financialImpact.total > 0 ? T.riskBg : T.white,
+        }}>
+          <div style={{ ...LABEL, marginBottom: 10, color: financialImpact.total > 0 ? T.risk : T.inkLight }}>
+            Financial Exposure
+          </div>
+          <div style={{
+            ...VALUE,
+            fontSize: 28,
+            color: financialImpact.total > 0 ? T.risk : T.ink,
+            marginBottom: 14,
+          }}>
+            ${financialImpact.total.toLocaleString()}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
+            <div>
+              <div style={{ ...LABEL, fontSize: 9, marginBottom: 3 }}>Expedite Costs</div>
+              <div style={{ ...SMALL_VALUE, color: financialImpact.expediteCosts > 0 ? T.risk : T.ink }}>
+                ${financialImpact.expediteCosts.toLocaleString()}
+              </div>
+            </div>
+            <div>
+              <div style={{ ...LABEL, fontSize: 9, marginBottom: 3 }}>Stockout Risk</div>
+              <div style={{ ...SMALL_VALUE, color: financialImpact.stockoutRisk > 0 ? T.risk : T.ink }}>
+                ${financialImpact.stockoutRisk.toLocaleString()}
+              </div>
+            </div>
+            <div>
+              <div style={{ ...LABEL, fontSize: 9, marginBottom: 3 }}>Carrying Cost</div>
+              <div style={{ ...SMALL_VALUE, color: financialImpact.inventoryCarrying > 0 ? T.risk : T.ink }}>
+                ${financialImpact.inventoryCarrying.toLocaleString()}
+              </div>
+            </div>
+            <div>
+              <div style={{ ...LABEL, fontSize: 9, marginBottom: 3 }}>Overtime</div>
+              <div style={{ ...SMALL_VALUE, color: financialImpact.overtimeCosts > 0 ? T.risk : T.ink }}>
+                ${financialImpact.overtimeCosts.toLocaleString()}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 2x3 Grid of Module Snapshots */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>

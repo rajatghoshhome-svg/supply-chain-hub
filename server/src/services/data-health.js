@@ -296,5 +296,165 @@ export function applyFixes(record, autoFixes) {
   return fixed;
 }
 
+// ─── Dataset-Level Health Checks ─────────────────────────────────
+/**
+ * Run health checks across the full dataset.
+ *
+ * @param {Object} data - { skus, boms, inventory, planningParams }
+ *   skus: [{ code, name, ... }]
+ *   boms: [{ parent, child, quantityPer, ... }]
+ *   inventory: [{ sku, onHand, ... }]
+ *   planningParams: [{ sku, leadTimeWeeks, safetyStock, lotSizeRule, lotSizeValue, ... }]
+ * @returns {{ autoFixed: Array, flagged: Array, blocked: Array }}
+ */
+export function runHealthChecks(data) {
+  const autoFixed = [];
+  const flagged = [];
+  const blocked = [];
+
+  const skus = data.skus || [];
+  const boms = data.boms || [];
+  const inventory = data.inventory || [];
+  const planningParams = data.planningParams || [];
+
+  // Build SKU code set for reference checks
+  const skuCodes = new Set(skus.map(s => (s.code || s.sku || '').toString().trim()));
+
+  // ── Rule 1: Lead time check (0 or >12 weeks) ──
+  for (let i = 0; i < planningParams.length; i++) {
+    const p = planningParams[i];
+    const lt = Number(p.leadTimeWeeks ?? p.lead_time_weeks ?? p.leadTimeDays ?? null);
+    const field = p.leadTimeWeeks != null ? 'leadTimeWeeks' : (p.lead_time_weeks != null ? 'lead_time_weeks' : 'leadTimeDays');
+    if (lt != null && !isNaN(lt)) {
+      if (lt === 0) {
+        const oldValue = 0;
+        const newValue = 1;
+        p[field] = newValue;
+        autoFixed.push({
+          table: 'planningParams',
+          row: i,
+          field,
+          oldValue,
+          newValue,
+          rule: 'leadTimeZero',
+          message: `Lead time was 0, auto-corrected to 1`,
+        });
+      } else if (lt > 12) {
+        flagged.push({
+          table: 'planningParams',
+          row: i,
+          field,
+          value: lt,
+          rule: 'leadTimeExcessive',
+          message: `Lead time of ${lt} weeks exceeds 12-week threshold — verify`,
+        });
+      }
+    }
+  }
+
+  // ── Rule 2: Safety stock check (negative) ──
+  for (let i = 0; i < planningParams.length; i++) {
+    const p = planningParams[i];
+    const ss = Number(p.safetyStock ?? p.safety_stock ?? null);
+    const field = p.safetyStock != null ? 'safetyStock' : 'safety_stock';
+    if (ss != null && !isNaN(ss) && ss < 0) {
+      const oldValue = ss;
+      p[field] = 0;
+      autoFixed.push({
+        table: 'planningParams',
+        row: i,
+        field,
+        oldValue,
+        newValue: 0,
+        rule: 'safetyStockNegative',
+        message: `Negative safety stock (${oldValue}) auto-corrected to 0`,
+      });
+    }
+  }
+
+  // ── Rule 3: BOM validation (child references non-existent SKU) ──
+  for (let i = 0; i < boms.length; i++) {
+    const b = boms[i];
+    const child = (b.child || b.child_sku || b.component || '').toString().trim();
+    if (child && skuCodes.size > 0 && !skuCodes.has(child)) {
+      blocked.push({
+        table: 'boms',
+        row: i,
+        field: 'child',
+        value: child,
+        rule: 'bomChildMissing',
+        message: `BOM child "${child}" references a non-existent SKU`,
+      });
+    }
+  }
+
+  // ── Rule 4: Demand check (negative demand) ──
+  // Demand can be in inventory records or a separate demand array
+  const demandRecords = data.demand || [];
+  for (let i = 0; i < demandRecords.length; i++) {
+    const d = demandRecords[i];
+    const qty = Number(d.quantity ?? d.qty ?? d.demandQty ?? d.demand_qty ?? null);
+    const field = d.quantity != null ? 'quantity' : (d.qty != null ? 'qty' : (d.demandQty != null ? 'demandQty' : 'demand_qty'));
+    if (qty != null && !isNaN(qty) && qty < 0) {
+      const oldValue = qty;
+      d[field] = 0;
+      autoFixed.push({
+        table: 'demand',
+        row: i,
+        field,
+        oldValue,
+        newValue: 0,
+        rule: 'demandNegative',
+        message: `Negative demand (${oldValue}) auto-corrected to 0`,
+      });
+    }
+  }
+
+  // ── Rule 5: Lot size check (FOQ quantity is 0) ──
+  for (let i = 0; i < planningParams.length; i++) {
+    const p = planningParams[i];
+    const rule = (p.lotSizeRule || p.lot_size_rule || '').toString().toLowerCase();
+    const val = Number(p.lotSizeValue ?? p.lot_size_value ?? null);
+    const ruleField = p.lotSizeRule != null ? 'lotSizeRule' : 'lot_size_rule';
+    const valField = p.lotSizeValue != null ? 'lotSizeValue' : 'lot_size_value';
+
+    if ((rule === 'fixed-order-qty' || rule === 'foq') && (val === 0 || isNaN(val))) {
+      const oldRule = p[ruleField];
+      p[ruleField] = 'lot-for-lot';
+      p[valField] = null;
+      autoFixed.push({
+        table: 'planningParams',
+        row: i,
+        field: ruleField,
+        oldValue: oldRule,
+        newValue: 'lot-for-lot',
+        rule: 'lotSizeFOQZero',
+        message: `FOQ with quantity 0 auto-switched to lot-for-lot`,
+      });
+    }
+  }
+
+  // ── Rule 6: Duplicate SKU codes ──
+  const seenSkus = new Map();
+  for (let i = 0; i < skus.length; i++) {
+    const code = (skus[i].code || skus[i].sku || '').toString().trim();
+    if (!code) continue;
+    if (seenSkus.has(code)) {
+      flagged.push({
+        table: 'skus',
+        row: i,
+        field: 'code',
+        value: code,
+        rule: 'duplicateSKU',
+        message: `Duplicate SKU code "${code}" (first seen at row ${seenSkus.get(code)})`,
+      });
+    } else {
+      seenSkus.set(code, i);
+    }
+  }
+
+  return { autoFixed, flagged, blocked };
+}
+
 // Export for testing
 export { rules, THRESHOLDS };
