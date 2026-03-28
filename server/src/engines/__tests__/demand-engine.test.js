@@ -431,7 +431,9 @@ describe('Best Fit Method Selection', () => {
     const methodNames = result.allMethods.map(m => m.method);
     expect(methodNames).toContain('sma-3');
     expect(methodNames).toContain('sma-6');
-    expect(methodNames).toContain('ses');
+    expect(methodNames).toContain('ses-α0.1');
+    expect(methodNames).toContain('ses-α0.3');
+    expect(methodNames).toContain('ses-α0.5');
     expect(methodNames).toContain('holt');
   });
 

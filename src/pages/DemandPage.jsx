@@ -56,8 +56,8 @@ export default function DemandPage() {
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
 
         {/* SKU Selector */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-          {(skus.length > 0 ? skus : [{ skuCode: 'MTR-100', skuName: '1HP Standard Motor' }, { skuCode: 'MTR-200', skuName: '2HP Premium Motor' }, { skuCode: 'MTR-500', skuName: '5HP Industrial Motor' }]).map(s => (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
+          {(skus.length > 0 ? skus : [{ skuCode: 'MTR-100', skuName: '1HP Standard Motor' }]).map(s => (
             <button
               key={s.skuCode}
               onClick={() => setSelectedSku(s.skuCode)}
@@ -65,17 +65,17 @@ export default function DemandPage() {
                 background: selectedSku === s.skuCode ? T.ink : T.white,
                 color: selectedSku === s.skuCode ? T.white : T.ink,
                 border: `1px solid ${selectedSku === s.skuCode ? T.ink : T.border}`,
-                borderRadius: 8,
-                padding: '8px 16px',
+                borderRadius: 6,
+                padding: '6px 12px',
                 cursor: 'pointer',
                 fontFamily: 'Inter',
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: selectedSku === s.skuCode ? 500 : 400,
                 transition: 'all 0.12s',
               }}
             >
-              <span style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{s.skuCode}</span>
-              <span style={{ marginLeft: 6, color: selectedSku === s.skuCode ? 'rgba(255,255,255,0.7)' : T.inkLight }}>{s.skuName}</span>
+              <span style={{ fontFamily: 'JetBrains Mono', fontSize: 11 }}>{s.skuCode}</span>
+              <span style={{ marginLeft: 5, color: selectedSku === s.skuCode ? 'rgba(255,255,255,0.7)' : T.inkLight, fontSize: 11 }}>{s.skuName}</span>
             </button>
           ))}
         </div>
@@ -182,34 +182,98 @@ export default function DemandPage() {
 
         {/* ─── History Tab ─────────────────────────────────────── */}
         {tab === 'history' && (
-          <Card title={`Weekly Demand History — ${selectedSku}`}>
-            {loading ? (
-              <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>Loading...</div>
-            ) : historyData ? (
-              <div style={{ maxHeight: 500, overflowY: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead>
-                    <tr style={{ borderBottom: `1px solid ${T.border}`, position: 'sticky', top: 0, background: T.white }}>
-                      <th style={{ textAlign: 'left', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Week</th>
-                      <th style={{ textAlign: 'left', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Period</th>
-                      <th style={{ textAlign: 'right', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Demand</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {historyData.periods?.map((p, i) => (
-                      <tr key={p} style={{ borderBottom: `1px solid ${T.border}` }}>
-                        <td style={{ padding: '6px 12px', color: T.inkLight, fontFamily: 'JetBrains Mono', fontSize: 11 }}>{i + 1}</td>
-                        <td style={{ padding: '6px 12px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{p}</td>
-                        <td style={{ padding: '6px 12px', textAlign: 'right', fontFamily: 'JetBrains Mono', fontWeight: 500 }}>{historyData.demand[i]}</td>
+          <>
+            {/* Demand History Bar Chart */}
+            {historyData && !loading && (() => {
+              const d = historyData.demand;
+              const maxVal = Math.max(...d);
+              const avg = Math.round(d.reduce((s, v) => s + v, 0) / d.length * 10) / 10;
+              const chartW = 1120, chartH = 140, barGap = 1;
+              const barW = Math.max(1, (chartW - barGap * d.length) / d.length);
+              return (
+                <Card title={`Demand Pattern — ${selectedSku}`} style={{ marginBottom: 16 }}>
+                  <div style={{ padding: '16px 20px' }}>
+                    <div style={{ display: 'flex', gap: 20, marginBottom: 12 }}>
+                      {[
+                        { label: 'Avg Weekly', value: avg },
+                        { label: 'Peak', value: Math.max(...d) },
+                        { label: 'Min', value: Math.min(...d) },
+                        { label: 'Weeks', value: d.length },
+                        { label: 'CoV', value: `${Math.round(Math.sqrt(d.reduce((s, v) => s + (v - avg) ** 2, 0) / d.length) / avg * 100)}%` },
+                      ].map(m => (
+                        <div key={m.label}>
+                          <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9, color: T.inkLight, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 3 }}>{m.label}</div>
+                          <div style={{ fontFamily: 'Sora', fontSize: 18, fontWeight: 600, color: T.ink }}>{m.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <svg width="100%" viewBox={`0 0 ${chartW} ${chartH}`} style={{ display: 'block' }}>
+                      {/* Average line */}
+                      <line x1={0} y1={chartH - (avg / maxVal) * (chartH - 10)} x2={chartW} y2={chartH - (avg / maxVal) * (chartH - 10)} stroke={T.accent} strokeDasharray="4 3" strokeWidth={1} opacity={0.5} />
+                      {/* Bars */}
+                      {d.map((v, i) => {
+                        const h = (v / maxVal) * (chartH - 10);
+                        return (
+                          <rect
+                            key={i}
+                            x={i * (barW + barGap)}
+                            y={chartH - h}
+                            width={barW}
+                            height={h}
+                            fill={v >= avg ? T.ink : T.inkLight}
+                            opacity={0.7}
+                            rx={1}
+                          />
+                        );
+                      })}
+                    </svg>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontFamily: 'JetBrains Mono', fontSize: 9, color: T.inkGhost }}>
+                      <span>{historyData.periods[0]}</span>
+                      <span style={{ color: T.accent, fontSize: 9 }}>— avg: {avg}</span>
+                      <span>{historyData.periods[d.length - 1]}</span>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })()}
+
+            <Card title={`Weekly Demand History — ${selectedSku}`}>
+              {loading ? (
+                <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>Loading...</div>
+              ) : historyData ? (
+                <div style={{ maxHeight: 500, overflowY: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ borderBottom: `1px solid ${T.border}`, position: 'sticky', top: 0, background: T.white }}>
+                        <th style={{ textAlign: 'left', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Week</th>
+                        <th style={{ textAlign: 'left', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Period</th>
+                        <th style={{ textAlign: 'right', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Demand</th>
+                        <th style={{ textAlign: 'left', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, width: 120 }}></th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>No history available</div>
-            )}
-          </Card>
+                    </thead>
+                    <tbody>
+                      {historyData.periods?.map((p, i) => {
+                        const maxD = Math.max(...historyData.demand);
+                        const pct = (historyData.demand[i] / maxD) * 100;
+                        return (
+                          <tr key={p} style={{ borderBottom: `1px solid ${T.border}` }}>
+                            <td style={{ padding: '6px 12px', color: T.inkLight, fontFamily: 'JetBrains Mono', fontSize: 11 }}>{i + 1}</td>
+                            <td style={{ padding: '6px 12px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{p}</td>
+                            <td style={{ padding: '6px 12px', textAlign: 'right', fontFamily: 'JetBrains Mono', fontWeight: 500 }}>{historyData.demand[i]}</td>
+                            <td style={{ padding: '6px 12px' }}>
+                              <div style={{ height: 10, width: `${pct}%`, background: T.ink, borderRadius: 2, opacity: 0.5 }} />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>No history available</div>
+              )}
+            </Card>
+          </>
         )}
 
         {/* ─── Accuracy Tab ────────────────────────────────────── */}
