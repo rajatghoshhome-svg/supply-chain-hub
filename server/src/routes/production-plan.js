@@ -27,7 +27,7 @@ import {
   getPlants,
   getDCs,
   getBestSourceForDC,
-} from '../data/synthetic-network.js';
+} from '../services/data-provider.js';
 
 export const productionPlanRouter = Router();
 

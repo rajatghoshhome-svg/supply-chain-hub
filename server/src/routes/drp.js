@@ -23,7 +23,7 @@ import {
   getBestSourceForDC,
   getDCs,
   getPlants,
-} from '../data/synthetic-network.js';
+} from '../services/data-provider.js';
 
 export const drpRouter = Router();
 

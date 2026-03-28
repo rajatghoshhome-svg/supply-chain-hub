@@ -1,58 +1,475 @@
-import 'dotenv/config';
+// ─────────────────────────────────────────────────────────────────────────────
+// Supply Chain Hub — Database Seed Script
+//
+// Loads synthetic data into PostgreSQL via Drizzle ORM.
+// Run:  cd server && node src/db/seed.js
+//
+// Data sources:
+//   - synthetic-network.js  (locations, lanes, inventory, work centers)
+//   - synthetic-demand.js   (52-week demand history)
+//   - synthetic-bom.js      (SKU master, BOMs)
+//
+// Design: Each section is self-contained so individual sections can be
+// adapted or replaced when loading different company datasets via CSV.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
 import { drizzle } from 'drizzle-orm/postgres-js';
+
+// Load .env from project root (one level above server/)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+dotenv.config({ path: resolve(__dirname, '../../../.env') });
+import { sql } from 'drizzle-orm';
 import postgres from 'postgres';
 import * as schema from './schema.js';
 
-const client = postgres(process.env.DATABASE_URL);
+// ── Synthetic data imports ──────────────────────────────────────────────────
+import {
+  products,
+  productFamilies as networkProductFamilies,
+  plants,
+  distributionCenters,
+  suppliers,
+  workCenters as workCenterData,
+  lanes,
+  dcInventory,
+  plantInventory,
+} from '../data/synthetic-network.js';
+
+import { demandHistory as demandHistoryData } from '../data/synthetic-demand.js';
+
+import {
+  skuMaster,
+  plantBOMs,
+} from '../data/synthetic-bom.js';
+
+// ── Database connection ─────────────────────────────────────────────────────
+
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  console.error('ERROR: DATABASE_URL not set. Add it to .env or export it.');
+  process.exit(1);
+}
+
+const client = postgres(DATABASE_URL);
 const db = drizzle(client, { schema });
 
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Insert rows in batches to avoid exceeding PG parameter limits */
+async function batchInsert(table, rows, batchSize = 500) {
+  let total = 0;
+  for (let i = 0; i < rows.length; i += batchSize) {
+    const batch = rows.slice(i, i + batchSize);
+    await db.insert(table).values(batch).onConflictDoNothing();
+    total += batch.length;
+  }
+  return total;
+}
+
+// ── Main seed function ──────────────────────────────────────────────────────
+
 async function seed() {
-  console.log('Seeding database — Peakline Foods...');
+  const t0 = Date.now();
+  const summary = {};
 
-  // ── Locations (plants, DCs, suppliers) ──
-  const locationData = [
-    // Plants
-    { code: 'PLT-PDX', name: 'Portland Plant', type: 'plant', city: 'Portland', state: 'OR', lat: '45.520000', lng: '-122.680000', status: 'stable', statusLabel: 'Bars & Dry Snacks', color: '#2E7D32' },
-    { code: 'PLT-ATX', name: 'Austin Plant', type: 'plant', city: 'Austin', state: 'TX', lat: '30.270000', lng: '-97.740000', status: 'stable', statusLabel: 'Beverages', color: '#2E7D32' },
-    { code: 'PLT-NSH', name: 'Nashville Plant', type: 'plant', city: 'Nashville', state: 'TN', lat: '36.160000', lng: '-86.780000', status: 'stable', statusLabel: 'Specialty & Nut Butters', color: '#2E7D32' },
-    // Distribution Centers
-    { code: 'DC-ATL', name: 'Atlanta DC', type: 'dc', city: 'Atlanta', state: 'GA', lat: '33.750000', lng: '-84.390000', status: 'crisis', statusLabel: 'Critical — 3.1 days', color: '#B03A2E' },
-    { code: 'DC-CHI', name: 'Chicago DC', type: 'dc', city: 'Chicago', state: 'IL', lat: '41.880000', lng: '-87.630000', status: 'stable', statusLabel: 'Stable — 19 days', color: '#999' },
-    { code: 'DC-LAS', name: 'Las Vegas DC', type: 'dc', city: 'Las Vegas', state: 'NV', lat: '36.170000', lng: '-115.140000', status: 'review', statusLabel: 'Review — 8.4 days', color: '#D4A017' },
-    // Suppliers
-    { code: 'SUP-PKG', name: 'Pacific Packaging', type: 'supplier', city: 'Fresno', state: 'CA', lat: '36.740000', lng: '-119.770000', status: 'stable', statusLabel: 'Packaging film, cartons, labels', color: '#999' },
-    { code: 'SUP-ING', name: 'Heartland Ingredients', type: 'supplier', city: 'Des Moines', state: 'IA', lat: '41.590000', lng: '-93.620000', status: 'stable', statusLabel: 'Oats, nuts, cocoa, sugar, flour', color: '#999' },
-    { code: 'SUP-BTL', name: 'SouthGlass Bottles', type: 'supplier', city: 'Birmingham', state: 'AL', lat: '33.520000', lng: '-86.810000', status: 'stable', statusLabel: 'Glass bottles, aluminum cans, caps', color: '#999' },
+  console.log('');
+  console.log('============================================================');
+  console.log('  Supply Chain Hub — Database Seed');
+  console.log('============================================================');
+  console.log(`  Target: ${DATABASE_URL.replace(/\/\/.*@/, '//<credentials>@')}`);
+  console.log('');
+
+  // ========================================================================
+  // PHASE 1: Clear all tables (FK-dependency order — children first)
+  // ========================================================================
+
+  console.log('Phase 1: Clearing existing data...');
+
+  // Delete in reverse dependency order so FK constraints are respected.
+  // Tables that reference others must be deleted before the tables they reference.
+  const tablesToClear = [
+    // Leaf / child tables first
+    schema.aiMessages,
+    schema.aiConversations,
+    schema.decisionLog,
+    schema.dataHealthLog,
+    schema.agentExceptions,
+    schema.mrpExceptions,
+    schema.mrpRecords,
+    schema.bomLines,
+    schema.bomHeaders,
+    schema.productionOrders,
+    schema.schedulingConstraints,
+    schema.productionPlans,
+    schema.forecastAccuracy,
+    schema.demandForecasts,
+    schema.demandHistory,
+    schema.drpRecords,
+    schema.transferLines,
+    schema.plannedTransfers,
+    schema.inventoryRecords,
+    schema.distributionNetwork,
+    schema.planningParameters,
+    schema.productFamilyMembers,
+    schema.productFamilies,
+    schema.workCenters,
+    schema.planRuns,
+    schema.customers,
+    schema.skus,
+    schema.locations,
   ];
-  const insertedLocations = await db.insert(schema.locations).values(locationData).onConflictDoNothing().returning();
-  console.log(`  Locations: ${insertedLocations.length} inserted`);
 
-  // Build location ID lookup
+  for (const table of tablesToClear) {
+    await db.delete(table);
+  }
+  console.log(`  Cleared ${tablesToClear.length} tables.`);
+  console.log('');
+
+  // ========================================================================
+  // PHASE 2: Seed reference data
+  // ========================================================================
+
+  console.log('Phase 2: Seeding reference data...');
+
+  // ── 2a. Locations (plants, DCs, suppliers) ────────────────────────────
+  //    Source: synthetic-network.js — plants[], distributionCenters[], suppliers[]
+
+  const locationRows = [
+    ...plants.map(p => ({
+      code: p.code,
+      name: p.name,
+      type: 'plant',
+      city: p.city,
+      state: p.state,
+      lat: String(p.lat),
+      lng: String(p.lon),
+      status: 'stable',
+      statusLabel: p.specialization,
+      color: '#2E7D32',
+    })),
+    ...distributionCenters.map(dc => ({
+      code: dc.code,
+      name: dc.name,
+      type: 'dc',
+      city: dc.city,
+      state: dc.state,
+      lat: String(dc.lat),
+      lng: String(dc.lon),
+      status: 'stable',
+      statusLabel: null,
+      color: '#999',
+    })),
+    ...suppliers.map(s => ({
+      code: s.code,
+      name: s.name,
+      type: 'supplier',
+      city: s.city,
+      state: s.state,
+      lat: null,
+      lng: null,
+      status: 'stable',
+      statusLabel: s.materials,
+      color: '#999',
+    })),
+  ];
+
+  await db.insert(schema.locations).values(locationRows);
+  summary.locations = locationRows.length;
+  console.log(`  locations: ${locationRows.length} rows`);
+
+  // Build location lookup by code -> id
   const allLocations = await db.select().from(schema.locations);
   const locByCode = Object.fromEntries(allLocations.map(l => [l.code, l.id]));
 
-  // ── SKUs (11 finished goods) ──
-  const skuData = [
-    { code: 'GRN-BAR', name: 'Oat & Honey Granola Bar', productFamily: 'bars', uom: 'case/24', shelfLifeDays: 270 },
-    { code: 'PRO-BAR', name: 'Peanut Butter Protein Bar', productFamily: 'bars', uom: 'case/24', shelfLifeDays: 270 },
-    { code: 'TRL-MIX', name: 'Classic Trail Mix', productFamily: 'snacks', uom: 'case/12', shelfLifeDays: 365 },
-    { code: 'VEG-CHP', name: 'Sea Salt Veggie Chips', productFamily: 'snacks', uom: 'case/12', shelfLifeDays: 240 },
-    { code: 'RCE-CRK', name: 'Brown Rice Crackers', productFamily: 'snacks', uom: 'case/12', shelfLifeDays: 300 },
-    { code: 'SPK-WAT', name: 'Lemon Sparkling Water', productFamily: 'beverages', uom: 'case/24', shelfLifeDays: 540 },
-    { code: 'JCE-APL', name: 'Cold-Pressed Apple Juice', productFamily: 'beverages', uom: 'case/12', shelfLifeDays: 90 },
-    { code: 'KMB-GNG', name: 'Ginger Kombucha', productFamily: 'beverages', uom: 'case/12', shelfLifeDays: 120 },
-    { code: 'NRG-CIT', name: 'Citrus Energy Drink', productFamily: 'beverages', uom: 'case/24', shelfLifeDays: 365 },
-    { code: 'CLD-BRW', name: 'Vanilla Cold Brew Coffee', productFamily: 'beverages', uom: 'case/12', shelfLifeDays: 60 },
-    { code: 'NUT-BTR', name: 'Almond Nut Butter', productFamily: 'snacks', uom: 'case/12', shelfLifeDays: 365 },
-  ];
-  const insertedSkus = await db.insert(schema.skus).values(skuData).onConflictDoNothing().returning();
-  console.log(`  SKUs: ${insertedSkus.length} inserted`);
+  // ── 2b. SKUs (all 40 items: FG, SUB, RAW) ────────────────────────────
+  //    Source: synthetic-bom.js — skuMaster[]
 
+  const familyForCode = {};
+  for (const item of skuMaster) {
+    // Derive product family from the network products data for FGs
+    const prod = products.find(p => p.code === item.code);
+    familyForCode[item.code] = prod ? prod.family : null;
+  }
+
+  const skuRows = skuMaster.map(item => ({
+    code: item.code,
+    name: item.name,
+    productFamily: familyForCode[item.code] || item.type.toLowerCase(), // FG gets family, SUB/RAW get type
+    uom: item.uom,
+    abcClass: item.abcClass,
+    shelfLifeDays: item.type === 'FG' ? (products.find(p => p.code === item.code)?.shelfLifeDays || null) : null,
+  }));
+
+  await db.insert(schema.skus).values(skuRows);
+  summary.skus = skuRows.length;
+  console.log(`  skus: ${skuRows.length} rows (${skuMaster.filter(s => s.type === 'FG').length} FG, ${skuMaster.filter(s => s.type === 'SUB').length} SUB, ${skuMaster.filter(s => s.type === 'RAW').length} RAW)`);
+
+  // Build SKU lookup by code -> id
   const allSkus = await db.select().from(schema.skus);
   const skuByCode = Object.fromEntries(allSkus.map(s => [s.code, s.id]));
 
-  // ── Customers (retail channels) ──
-  const customerData = [
+  // ── 2c. Product Families + Members ────────────────────────────────────
+  //    Source: synthetic-network.js — productFamilies {}
+
+  const familyNames = Object.keys(networkProductFamilies); // bars, snacks, beverages
+  const familyInserted = await db.insert(schema.productFamilies)
+    .values(familyNames.map(name => ({
+      name,
+      description: `${name.charAt(0).toUpperCase() + name.slice(1)} product family`,
+    })))
+    .returning();
+  summary.product_families = familyInserted.length;
+  console.log(`  product_families: ${familyInserted.length} rows`);
+
+  const familyByName = Object.fromEntries(familyInserted.map(f => [f.name, f.id]));
+
+  const memberRows = [];
+  for (const [familyName, skuCodes] of Object.entries(networkProductFamilies)) {
+    for (const code of skuCodes) {
+      if (skuByCode[code]) {
+        memberRows.push({
+          familyId: familyByName[familyName],
+          skuId: skuByCode[code],
+        });
+      }
+    }
+  }
+  await db.insert(schema.productFamilyMembers).values(memberRows);
+  summary.product_family_members = memberRows.length;
+  console.log(`  product_family_members: ${memberRows.length} rows`);
+
+  // ── 2d. Distribution Network (lanes) ──────────────────────────────────
+  //    Source: synthetic-network.js — lanes[]
+
+  const laneRows = lanes.map(l => ({
+    sourceId: locByCode[l.from],
+    destId: locByCode[l.to],
+    leadTimeDays: l.leadTimeDays,
+    transitCostPerUnit: String(l.costPerLb),
+    distanceMiles: null, // not provided in synthetic data; could be computed
+  }));
+
+  await db.insert(schema.distributionNetwork).values(laneRows);
+  summary.distribution_network = laneRows.length;
+  console.log(`  distribution_network: ${laneRows.length} rows`);
+
+  // ── 2e. Work Centers ──────────────────────────────────────────────────
+  //    Source: synthetic-network.js — workCenters[]
+
+  const wcRows = workCenterData.map(wc => ({
+    code: wc.code,
+    name: wc.name,
+    locationId: locByCode[wc.plant],
+    capacityPerDay: String(wc.capacityHrsPerPeriod),
+    capacityUom: 'hrs/period',
+  }));
+
+  await db.insert(schema.workCenters).values(wcRows);
+  summary.work_centers = wcRows.length;
+  console.log(`  work_centers: ${wcRows.length} rows`);
+
+  // ── 2f. Inventory Records (plants + DCs) ──────────────────────────────
+  //    Source: synthetic-network.js — plantInventory{}, dcInventory{}
+
+  const today = new Date().toISOString().split('T')[0];
+  const inventoryRows = [];
+
+  // DC inventory (has onHand + safetyStock)
+  for (const [dcCode, skuMap] of Object.entries(dcInventory)) {
+    for (const [skuCode, inv] of Object.entries(skuMap)) {
+      inventoryRows.push({
+        skuId: skuByCode[skuCode],
+        locationId: locByCode[dcCode],
+        onHand: String(inv.onHand),
+        allocated: '0',
+        inTransit: '0',
+        safetyStock: String(inv.safetyStock),
+        reorderPoint: String(inv.safetyStock * 2), // 2x safety stock as default ROP
+        snapshotDate: today,
+      });
+    }
+  }
+
+  // Plant finished-goods inventory (onHand only)
+  for (const [plantCode, skuMap] of Object.entries(plantInventory)) {
+    for (const [skuCode, inv] of Object.entries(skuMap)) {
+      inventoryRows.push({
+        skuId: skuByCode[skuCode],
+        locationId: locByCode[plantCode],
+        onHand: String(inv.onHand),
+        allocated: '0',
+        inTransit: '0',
+        safetyStock: '0',
+        reorderPoint: '0',
+        snapshotDate: today,
+      });
+    }
+  }
+
+  await db.insert(schema.inventoryRecords).values(inventoryRows);
+  summary.inventory_records = inventoryRows.length;
+  console.log(`  inventory_records: ${inventoryRows.length} rows (${Object.keys(dcInventory).length} DCs + ${Object.keys(plantInventory).length} plants)`);
+
+  // ── 2g. Demand History (52 weeks x 11 SKUs x 3 DCs) ──────────────────
+  //    Source: synthetic-demand.js — demandHistory[]
+
+  const demandRows = demandHistoryData.map(d => ({
+    skuId: skuByCode[d.skuCode],
+    locationId: locByCode[d.dcCode],
+    periodStart: d.weekStart,
+    periodType: d.periodType,
+    actualQty: String(d.actualQty),
+  }));
+
+  const demandInserted = await batchInsert(schema.demandHistory, demandRows, 500);
+  summary.demand_history = demandInserted;
+  console.log(`  demand_history: ${demandInserted} rows (52 weeks x ${products.length} SKUs x ${distributionCenters.length} DCs)`);
+
+  // ── 2h. BOM Headers + BOM Lines ───────────────────────────────────────
+  //    Source: synthetic-bom.js — plantBOMs{}
+  //
+  //    Each plant has its own BOM set. We create one bom_header per unique
+  //    parent SKU (across all plants, deduplicated), then bom_lines for each
+  //    parent-child relationship.
+
+  // Collect unique parent->children relationships across all plants.
+  // A parent SKU can appear in multiple plants (dual-sourced), but the BOM
+  // structure is the same, so we deduplicate.
+  const bomMap = new Map(); // parentCode -> Map<childCode, { qtyPer, scrapPct }>
+
+  for (const [_plantCode, bomEntries] of Object.entries(plantBOMs)) {
+    for (const entry of bomEntries) {
+      if (!bomMap.has(entry.parent)) {
+        bomMap.set(entry.parent, new Map());
+      }
+      const children = bomMap.get(entry.parent);
+      // Use first occurrence (BOMs are identical across plants for same parent)
+      if (!children.has(entry.child)) {
+        children.set(entry.child, {
+          qtyPer: entry.qtyPer,
+          scrapPct: entry.scrapPct,
+        });
+      }
+    }
+  }
+
+  // Insert BOM headers (one per unique parent SKU)
+  const parentCodes = [...bomMap.keys()];
+  const bomHeaderRows = parentCodes.map(parentCode => ({
+    parentSkuId: skuByCode[parentCode],
+    version: 1,
+    effectiveDate: '2025-01-01',
+    status: 'active',
+  }));
+
+  const insertedHeaders = await db.insert(schema.bomHeaders)
+    .values(bomHeaderRows)
+    .returning();
+  summary.bom_headers = insertedHeaders.length;
+  console.log(`  bom_headers: ${insertedHeaders.length} rows`);
+
+  // Build bomHeader lookup: parentCode -> bomHeader.id
+  const bomHeaderByParent = {};
+  for (let i = 0; i < parentCodes.length; i++) {
+    bomHeaderByParent[parentCodes[i]] = insertedHeaders[i].id;
+  }
+
+  // Insert BOM lines
+  const bomLineRows = [];
+  for (const [parentCode, children] of bomMap.entries()) {
+    const bomId = bomHeaderByParent[parentCode];
+    for (const [childCode, detail] of children.entries()) {
+      bomLineRows.push({
+        bomId,
+        childSkuId: skuByCode[childCode],
+        quantityPer: String(detail.qtyPer),
+        scrapPct: String(detail.scrapPct),
+        leadTimeOffsetDays: 0,
+      });
+    }
+  }
+
+  await db.insert(schema.bomLines).values(bomLineRows);
+  summary.bom_lines = bomLineRows.length;
+  console.log(`  bom_lines: ${bomLineRows.length} rows`);
+
+  // ── 2i. Planning Parameters ───────────────────────────────────────────
+  //    Source: synthetic-bom.js — skuMaster[] (leadTime, safetyStock, lotSizing)
+  //
+  //    We create planning parameters for each FG SKU at each DC location,
+  //    and for SUB/RAW items at each plant location where they are used.
+
+  const lotRuleMap = { FOQ: 'fixed-order-qty', L4L: 'lot-for-lot' };
+  const planningParamRows = [];
+
+  // FG SKUs: one record per DC
+  const fgItems = skuMaster.filter(s => s.type === 'FG');
+  const dcCodes = distributionCenters.map(dc => dc.code);
+
+  for (const item of fgItems) {
+    for (const dcCode of dcCodes) {
+      planningParamRows.push({
+        skuId: skuByCode[item.code],
+        locationId: locByCode[dcCode],
+        leadTimeDays: item.leadTimeDays,
+        safetyStock: String(item.safetyStock),
+        lotSizeRule: lotRuleMap[item.lotSizeRule] || 'lot-for-lot',
+        lotSizeValue: String(item.lotSizeValue),
+        moq: null,
+        reorderPoint: String(item.safetyStock * 2),
+      });
+    }
+  }
+
+  // SUB + RAW SKUs: one record per plant that uses them (derive from BOMs)
+  const plantCodesForMaterial = new Map(); // skuCode -> Set<plantCode>
+  for (const [plantCode, bomEntries] of Object.entries(plantBOMs)) {
+    for (const entry of bomEntries) {
+      // The child materials are what the plant needs
+      if (!plantCodesForMaterial.has(entry.child)) {
+        plantCodesForMaterial.set(entry.child, new Set());
+      }
+      plantCodesForMaterial.get(entry.child).add(plantCode);
+      // Also include parents that are SUB (subassemblies produced at the plant)
+      const parentItem = skuMaster.find(s => s.code === entry.parent);
+      if (parentItem && parentItem.type === 'SUB') {
+        if (!plantCodesForMaterial.has(entry.parent)) {
+          plantCodesForMaterial.set(entry.parent, new Set());
+        }
+        plantCodesForMaterial.get(entry.parent).add(plantCode);
+      }
+    }
+  }
+
+  const subRawItems = skuMaster.filter(s => s.type === 'SUB' || s.type === 'RAW');
+  for (const item of subRawItems) {
+    const plantCodes = plantCodesForMaterial.get(item.code) || new Set();
+    for (const plantCode of plantCodes) {
+      planningParamRows.push({
+        skuId: skuByCode[item.code],
+        locationId: locByCode[plantCode],
+        leadTimeDays: item.leadTimeDays,
+        safetyStock: String(item.safetyStock),
+        lotSizeRule: lotRuleMap[item.lotSizeRule] || 'lot-for-lot',
+        lotSizeValue: String(item.lotSizeValue),
+        moq: null,
+        reorderPoint: String(item.safetyStock * 2),
+      });
+    }
+  }
+
+  await batchInsert(schema.planningParameters, planningParamRows, 500);
+  summary.planning_parameters = planningParamRows.length;
+  console.log(`  planning_parameters: ${planningParamRows.length} rows (${fgItems.length} FG x ${dcCodes.length} DCs + SUB/RAW at plants)`);
+
+  // ── 2j. Customers (retail channels) ───────────────────────────────────
+  //    Static reference data for the demand side
+
+  const customerRows = [
     { code: 'WHOLEFOODS', name: 'Whole Foods', color: '#00674B' },
     { code: 'KROGER', name: 'Kroger', color: '#0071CE' },
     { code: 'COSTCO', name: 'Costco', color: '#E31837' },
@@ -60,134 +477,41 @@ async function seed() {
     { code: 'AMAZON', name: 'Amazon', color: '#FF9900' },
     { code: 'OTHER', name: 'Other', color: '#999' },
   ];
-  const insertedCustomers = await db.insert(schema.customers).values(customerData).onConflictDoNothing().returning();
-  console.log(`  Customers: ${insertedCustomers.length} inserted`);
 
-  // ── Inventory Records (per SKU per DC) ──
-  const today = new Date().toISOString().split('T')[0];
-  const inventoryData = [
-    // DC-ATL — crisis, low inventory
-    { skuId: skuByCode['GRN-BAR'], locationId: locByCode['DC-ATL'], onHand: '180', safetyStock: '200', reorderPoint: '400', snapshotDate: today },
-    { skuId: skuByCode['PRO-BAR'], locationId: locByCode['DC-ATL'], onHand: '120', safetyStock: '180', reorderPoint: '350', snapshotDate: today },
-    { skuId: skuByCode['TRL-MIX'], locationId: locByCode['DC-ATL'], onHand: '95', safetyStock: '150', reorderPoint: '300', snapshotDate: today },
-    { skuId: skuByCode['VEG-CHP'], locationId: locByCode['DC-ATL'], onHand: '140', safetyStock: '120', reorderPoint: '250', snapshotDate: today },
-    { skuId: skuByCode['RCE-CRK'], locationId: locByCode['DC-ATL'], onHand: '85', safetyStock: '100', reorderPoint: '200', snapshotDate: today },
-    { skuId: skuByCode['SPK-WAT'], locationId: locByCode['DC-ATL'], onHand: '220', safetyStock: '300', reorderPoint: '600', snapshotDate: today },
-    { skuId: skuByCode['JCE-APL'], locationId: locByCode['DC-ATL'], onHand: '65', safetyStock: '100', reorderPoint: '200', snapshotDate: today },
-    { skuId: skuByCode['KMB-GNG'], locationId: locByCode['DC-ATL'], onHand: '70', safetyStock: '80', reorderPoint: '160', snapshotDate: today },
-    { skuId: skuByCode['NRG-CIT'], locationId: locByCode['DC-ATL'], onHand: '160', safetyStock: '200', reorderPoint: '400', snapshotDate: today },
-    { skuId: skuByCode['CLD-BRW'], locationId: locByCode['DC-ATL'], onHand: '45', safetyStock: '60', reorderPoint: '120', snapshotDate: today },
-    { skuId: skuByCode['NUT-BTR'], locationId: locByCode['DC-ATL'], onHand: '110', safetyStock: '120', reorderPoint: '240', snapshotDate: today },
-    // DC-CHI — stable, healthy inventory
-    { skuId: skuByCode['GRN-BAR'], locationId: locByCode['DC-CHI'], onHand: '820', safetyStock: '200', reorderPoint: '400', snapshotDate: today },
-    { skuId: skuByCode['PRO-BAR'], locationId: locByCode['DC-CHI'], onHand: '680', safetyStock: '180', reorderPoint: '350', snapshotDate: today },
-    { skuId: skuByCode['TRL-MIX'], locationId: locByCode['DC-CHI'], onHand: '540', safetyStock: '150', reorderPoint: '300', snapshotDate: today },
-    { skuId: skuByCode['VEG-CHP'], locationId: locByCode['DC-CHI'], onHand: '480', safetyStock: '120', reorderPoint: '250', snapshotDate: today },
-    { skuId: skuByCode['RCE-CRK'], locationId: locByCode['DC-CHI'], onHand: '390', safetyStock: '100', reorderPoint: '200', snapshotDate: today },
-    { skuId: skuByCode['SPK-WAT'], locationId: locByCode['DC-CHI'], onHand: '1240', safetyStock: '300', reorderPoint: '600', snapshotDate: today },
-    { skuId: skuByCode['JCE-APL'], locationId: locByCode['DC-CHI'], onHand: '310', safetyStock: '100', reorderPoint: '200', snapshotDate: today },
-    { skuId: skuByCode['KMB-GNG'], locationId: locByCode['DC-CHI'], onHand: '260', safetyStock: '80', reorderPoint: '160', snapshotDate: today },
-    { skuId: skuByCode['NRG-CIT'], locationId: locByCode['DC-CHI'], onHand: '720', safetyStock: '200', reorderPoint: '400', snapshotDate: today },
-    { skuId: skuByCode['CLD-BRW'], locationId: locByCode['DC-CHI'], onHand: '190', safetyStock: '60', reorderPoint: '120', snapshotDate: today },
-    { skuId: skuByCode['NUT-BTR'], locationId: locByCode['DC-CHI'], onHand: '420', safetyStock: '120', reorderPoint: '240', snapshotDate: today },
-    // DC-LAS — review, moderate inventory
-    { skuId: skuByCode['GRN-BAR'], locationId: locByCode['DC-LAS'], onHand: '340', safetyStock: '200', reorderPoint: '400', snapshotDate: today },
-    { skuId: skuByCode['PRO-BAR'], locationId: locByCode['DC-LAS'], onHand: '280', safetyStock: '180', reorderPoint: '350', snapshotDate: today },
-    { skuId: skuByCode['TRL-MIX'], locationId: locByCode['DC-LAS'], onHand: '220', safetyStock: '150', reorderPoint: '300', snapshotDate: today },
-    { skuId: skuByCode['VEG-CHP'], locationId: locByCode['DC-LAS'], onHand: '260', safetyStock: '120', reorderPoint: '250', snapshotDate: today },
-    { skuId: skuByCode['RCE-CRK'], locationId: locByCode['DC-LAS'], onHand: '170', safetyStock: '100', reorderPoint: '200', snapshotDate: today },
-    { skuId: skuByCode['SPK-WAT'], locationId: locByCode['DC-LAS'], onHand: '580', safetyStock: '300', reorderPoint: '600', snapshotDate: today },
-    { skuId: skuByCode['JCE-APL'], locationId: locByCode['DC-LAS'], onHand: '140', safetyStock: '100', reorderPoint: '200', snapshotDate: today },
-    { skuId: skuByCode['KMB-GNG'], locationId: locByCode['DC-LAS'], onHand: '120', safetyStock: '80', reorderPoint: '160', snapshotDate: today },
-    { skuId: skuByCode['NRG-CIT'], locationId: locByCode['DC-LAS'], onHand: '380', safetyStock: '200', reorderPoint: '400', snapshotDate: today },
-    { skuId: skuByCode['CLD-BRW'], locationId: locByCode['DC-LAS'], onHand: '80', safetyStock: '60', reorderPoint: '120', snapshotDate: today },
-    { skuId: skuByCode['NUT-BTR'], locationId: locByCode['DC-LAS'], onHand: '200', safetyStock: '120', reorderPoint: '240', snapshotDate: today },
-  ];
-  await db.insert(schema.inventoryRecords).values(inventoryData).returning();
-  console.log(`  Inventory records: ${inventoryData.length} inserted`);
+  await db.insert(schema.customers).values(customerRows);
+  summary.customers = customerRows.length;
+  console.log(`  customers: ${customerRows.length} rows`);
 
-  // ── Distribution Network (lanes) ──
-  const networkData = [
-    // Supplier → Plant
-    { sourceId: locByCode['SUP-PKG'], destId: locByCode['PLT-PDX'], leadTimeDays: 1, transitCostPerUnit: '0.02', distanceMiles: 640 },
-    { sourceId: locByCode['SUP-PKG'], destId: locByCode['PLT-ATX'], leadTimeDays: 3, transitCostPerUnit: '0.04', distanceMiles: 1480 },
-    { sourceId: locByCode['SUP-PKG'], destId: locByCode['PLT-NSH'], leadTimeDays: 3, transitCostPerUnit: '0.04', distanceMiles: 2100 },
-    { sourceId: locByCode['SUP-ING'], destId: locByCode['PLT-PDX'], leadTimeDays: 3, transitCostPerUnit: '0.03', distanceMiles: 1730 },
-    { sourceId: locByCode['SUP-ING'], destId: locByCode['PLT-ATX'], leadTimeDays: 2, transitCostPerUnit: '0.02', distanceMiles: 940 },
-    { sourceId: locByCode['SUP-ING'], destId: locByCode['PLT-NSH'], leadTimeDays: 2, transitCostPerUnit: '0.02', distanceMiles: 670 },
-    { sourceId: locByCode['SUP-BTL'], destId: locByCode['PLT-ATX'], leadTimeDays: 2, transitCostPerUnit: '0.05', distanceMiles: 680 },
-    { sourceId: locByCode['SUP-BTL'], destId: locByCode['PLT-NSH'], leadTimeDays: 1, transitCostPerUnit: '0.03', distanceMiles: 190 },
-    // Plant → DC
-    { sourceId: locByCode['PLT-PDX'], destId: locByCode['DC-LAS'], leadTimeDays: 2, transitCostPerUnit: '0.06', distanceMiles: 970 },
-    { sourceId: locByCode['PLT-PDX'], destId: locByCode['DC-CHI'], leadTimeDays: 3, transitCostPerUnit: '0.08', distanceMiles: 2100 },
-    { sourceId: locByCode['PLT-PDX'], destId: locByCode['DC-ATL'], leadTimeDays: 4, transitCostPerUnit: '0.10', distanceMiles: 2630 },
-    { sourceId: locByCode['PLT-ATX'], destId: locByCode['DC-ATL'], leadTimeDays: 2, transitCostPerUnit: '0.05', distanceMiles: 920 },
-    { sourceId: locByCode['PLT-ATX'], destId: locByCode['DC-CHI'], leadTimeDays: 2, transitCostPerUnit: '0.06', distanceMiles: 1190 },
-    { sourceId: locByCode['PLT-ATX'], destId: locByCode['DC-LAS'], leadTimeDays: 3, transitCostPerUnit: '0.08', distanceMiles: 1220 },
-    { sourceId: locByCode['PLT-NSH'], destId: locByCode['DC-ATL'], leadTimeDays: 1, transitCostPerUnit: '0.03', distanceMiles: 250 },
-    { sourceId: locByCode['PLT-NSH'], destId: locByCode['DC-CHI'], leadTimeDays: 1, transitCostPerUnit: '0.04', distanceMiles: 470 },
-    { sourceId: locByCode['PLT-NSH'], destId: locByCode['DC-LAS'], leadTimeDays: 3, transitCostPerUnit: '0.08', distanceMiles: 1740 },
-  ];
-  await db.insert(schema.distributionNetwork).values(networkData).returning();
-  console.log(`  Network lanes: ${networkData.length} inserted`);
+  // ========================================================================
+  // PHASE 3: Summary
+  // ========================================================================
 
-  // ── Planned Transfers ──
-  const transferData = [
-    { code: 'STO-2026-031', sourceId: locByCode['PLT-NSH'], destId: locByCode['DC-ATL'], status: 'approved', urgency: 'critical', rebalanceScore: 91, transferCost: '1860', riskAvoided: '52400', mode: 'FTL', approvedBy: 'sarah.chen', decidedAt: new Date('2026-03-27') },
-    { code: 'STO-2026-030', sourceId: locByCode['PLT-ATX'], destId: locByCode['DC-ATL'], status: 'approved', urgency: 'critical', rebalanceScore: 84, transferCost: '2240', riskAvoided: '38600', mode: 'FTL', approvedBy: 'raj.patel', decidedAt: new Date('2026-03-26') },
-    { code: 'STO-2026-029', sourceId: locByCode['PLT-PDX'], destId: locByCode['DC-LAS'], status: 'deferred', urgency: 'review', rebalanceScore: 63, transferCost: '980', riskAvoided: '11200', mode: 'LTL', approvedBy: 'sarah.chen', decidedAt: new Date('2026-03-25') },
-    { code: 'STO-2026-028', sourceId: locByCode['PLT-ATX'], destId: locByCode['DC-CHI'], status: 'approved', urgency: 'critical', rebalanceScore: 89, transferCost: '3480', riskAvoided: '61200', mode: 'FTL Consolidated', approvedBy: 'mike.johnson', decidedAt: new Date('2026-03-24') },
-    { code: 'STO-2026-027', sourceId: locByCode['PLT-PDX'], destId: locByCode['DC-CHI'], status: 'dismissed', urgency: 'routine', rebalanceScore: 41, transferCost: '3120', riskAvoided: '9400', mode: 'FTL', approvedBy: 'raj.patel', decidedAt: new Date('2026-03-23') },
-    { code: 'STO-2026-026', sourceId: locByCode['PLT-NSH'], destId: locByCode['DC-ATL'], status: 'approved', urgency: 'critical', rebalanceScore: 88, transferCost: '1640', riskAvoided: '44800', mode: 'FTL', approvedBy: 'sarah.chen', decidedAt: new Date('2026-03-22') },
-    { code: 'STO-2026-025', sourceId: locByCode['PLT-ATX'], destId: locByCode['DC-LAS'], status: 'approved', urgency: 'review', rebalanceScore: 56, transferCost: '4200', riskAvoided: '22800', mode: 'FTL', approvedBy: 'mike.johnson', decidedAt: new Date('2026-03-21') },
-    { code: 'STO-2026-024', sourceId: locByCode['PLT-PDX'], destId: locByCode['DC-ATL'], status: 'approved', urgency: 'review', rebalanceScore: 74, transferCost: '2180', riskAvoided: '31600', mode: 'LTL', approvedBy: 'raj.patel', decidedAt: new Date('2026-03-20') },
-  ];
-  await db.insert(schema.plannedTransfers).values(transferData).onConflictDoNothing().returning();
-  console.log(`  Transfers: ${transferData.length} inserted`);
+  const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+  const totalRows = Object.values(summary).reduce((a, b) => a + b, 0);
 
-  // ── Demand History (12 weeks for all SKU/DC combos) ──
-  // Base weekly demand in cases — realistic for $120M CPG company
-  const baseWeeklyDemand = {
-    'GRN-BAR': { 'DC-ATL': 180, 'DC-CHI': 220, 'DC-LAS': 140 },
-    'PRO-BAR': { 'DC-ATL': 160, 'DC-CHI': 200, 'DC-LAS': 120 },
-    'TRL-MIX': { 'DC-ATL': 130, 'DC-CHI': 160, 'DC-LAS': 100 },
-    'VEG-CHP': { 'DC-ATL': 110, 'DC-CHI': 140, 'DC-LAS': 90 },
-    'RCE-CRK': { 'DC-ATL': 80,  'DC-CHI': 100, 'DC-LAS': 65 },
-    'SPK-WAT': { 'DC-ATL': 280, 'DC-CHI': 340, 'DC-LAS': 220 },
-    'JCE-APL': { 'DC-ATL': 95,  'DC-CHI': 120, 'DC-LAS': 75 },
-    'KMB-GNG': { 'DC-ATL': 70,  'DC-CHI': 90,  'DC-LAS': 55 },
-    'NRG-CIT': { 'DC-ATL': 190, 'DC-CHI': 240, 'DC-LAS': 150 },
-    'CLD-BRW': { 'DC-ATL': 55,  'DC-CHI': 70,  'DC-LAS': 45 },
-    'NUT-BTR': { 'DC-ATL': 100, 'DC-CHI': 130, 'DC-LAS': 80 },
-  };
-
-  const demandRows = [];
-  const startDate = new Date('2026-01-05'); // 12 weeks back from Mar 28
-  for (const [skuCode, locDemand] of Object.entries(baseWeeklyDemand)) {
-    for (const [locCode, base] of Object.entries(locDemand)) {
-      for (let w = 0; w < 12; w++) {
-        const weekStart = new Date(startDate);
-        weekStart.setDate(weekStart.getDate() + w * 7);
-        // Add +/- 15% noise
-        const noise = 1 + (Math.random() * 0.3 - 0.15);
-        demandRows.push({
-          skuId: skuByCode[skuCode],
-          locationId: locByCode[locCode],
-          periodStart: weekStart.toISOString().split('T')[0],
-          periodType: 'weekly',
-          actualQty: String(Math.round(base * noise)),
-        });
-      }
-    }
+  console.log('');
+  console.log('============================================================');
+  console.log('  Seed Summary');
+  console.log('============================================================');
+  for (const [table, count] of Object.entries(summary)) {
+    console.log(`  ${table.padEnd(28)} ${String(count).padStart(6)} rows`);
   }
-  await db.insert(schema.demandHistory).values(demandRows).onConflictDoNothing().returning();
-  console.log(`  Demand history: ${demandRows.length} rows inserted`);
+  console.log('  ────────────────────────────────────────');
+  console.log(`  ${'TOTAL'.padEnd(28)} ${String(totalRows).padStart(6)} rows`);
+  console.log(`  Completed in ${elapsed}s`);
+  console.log('============================================================');
+  console.log('');
 
-  console.log('Seed complete!');
   await client.end();
 }
 
+// ── Entry point ─────────────────────────────────────────────────────────────
+
 seed().catch(err => {
-  console.error('Seed failed:', err);
+  console.error('');
+  console.error('Seed FAILED:', err.message);
+  if (err.code) console.error('  PG error code:', err.code);
+  if (err.detail) console.error('  Detail:', err.detail);
+  console.error('');
   process.exit(1);
 });

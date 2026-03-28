@@ -30,8 +30,8 @@ import {
   getPlants,
   getDCs,
   getBestSourceForDC,
-} from '../data/synthetic-network.js';
-import { plantBOMs, getSkuByCode } from '../data/synthetic-bom.js';
+} from './data-provider.js';
+import { plantBOMs, getSkuByCode } from './data-provider.js';
 
 // ─── Helper: make 8 weekly periods ─────────────────────────────
 

@@ -12,7 +12,7 @@ import {
   products,
   productSourcing,
   suppliers,
-} from '../data/synthetic-network.js';
+} from '../services/data-provider.js';
 
 export const networkRouter = Router();
 

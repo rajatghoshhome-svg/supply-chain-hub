@@ -21,8 +21,8 @@
 import { Router } from 'express';
 import { runMRP, explodeBOM } from '../engines/mrp-engine.js';
 import { buildMRPContext, formatMRPSummary } from '../services/ai-context/mrp-context.js';
-import { skuMaster, bomTree, plantBOMs, generateDemandForecast, getSkuByCode } from '../data/synthetic-bom.js';
-import { getProductsForPlant, getPlants, plantInventory } from '../data/synthetic-network.js';
+import { skuMaster, bomTree, plantBOMs, generateDemandForecast, getSkuByCode } from '../services/data-provider.js';
+import { getProductsForPlant, getPlants, plantInventory } from '../services/data-provider.js';
 
 export const mrpRouter = Router();
 

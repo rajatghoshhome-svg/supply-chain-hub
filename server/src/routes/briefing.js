@@ -24,9 +24,9 @@ import {
   getBestSourceForDC,
   networkLocations,
   networkLanes,
-} from '../data/synthetic-network.js';
-import { plantBOMs, getSkuByCode } from '../data/synthetic-bom.js';
-import { demandHistory } from '../data/synthetic-demand.js';
+} from '../services/data-provider.js';
+import { plantBOMs, getSkuByCode } from '../services/data-provider.js';
+import { demandHistory } from '../services/data-provider.js';
 
 export const briefingRouter = Router();
 

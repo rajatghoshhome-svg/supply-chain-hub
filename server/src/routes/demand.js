@@ -19,7 +19,7 @@ import {
   bestFit,
 } from '../engines/demand-engine.js';
 import { buildDemandContext } from '../services/ai-context/demand-context.js';
-import { demandHistory, getDemandWithPeriods } from '../data/synthetic-demand.js';
+import { demandHistory, getDemandWithPeriods } from '../services/data-provider.js';
 import { ValidationError } from '../middleware/error-handler.js';
 import { triggerFullCascade } from '../services/cascade-handlers.js';
 

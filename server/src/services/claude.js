@@ -17,7 +17,7 @@ import { runProductionPlan, roughCutCapacity } from '../engines/prod-plan-engine
 import { runScheduler } from '../engines/sched-engine.js';
 import { runMRP } from '../engines/mrp-engine.js';
 import { bestFit } from '../engines/demand-engine.js';
-import { demandHistory } from '../data/synthetic-demand.js';
+import { demandHistory } from './data-provider.js';
 import {
   products,
   dcInventory,
@@ -31,8 +31,8 @@ import {
   getPlants,
   getProductsForPlant,
   productFamilies,
-} from '../data/synthetic-network.js';
-import { plantBOMs, getSkuByCode } from '../data/synthetic-bom.js';
+} from './data-provider.js';
+import { plantBOMs, getSkuByCode } from './data-provider.js';
 
 // Per-module context builders
 import { buildDemandChatContext } from './ai-context/demand-context.js';
