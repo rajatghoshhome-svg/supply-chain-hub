@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { T } from '../styles/tokens';
 import CascadeViz from '../components/CascadeViz';
 import NetworkMap from '../components/NetworkMap';
@@ -17,6 +17,30 @@ const CASCADE_STEPS = [
 export default function Landing() {
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
+  const [cascadeTriggering, setCascadeTriggering] = useState(false);
+  const [cascadeTriggerResult, setCascadeTriggerResult] = useState(null);
+
+  const handleRunFullCascade = useCallback(async () => {
+    setCascadeTriggering(true);
+    setCascadeTriggerResult(null);
+    try {
+      const resp = await fetch('/api/cascade/trigger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        setCascadeTriggerResult({ ok: true, planRunId: data.planRunId });
+      } else {
+        setCascadeTriggerResult({ ok: false, error: data.error || 'Trigger failed' });
+      }
+    } catch (err) {
+      setCascadeTriggerResult({ ok: false, error: err.message });
+    } finally {
+      setCascadeTriggering(false);
+    }
+  }, []);
 
   useEffect(() => {
     // Fetch a quick DRP demo to show live stats
@@ -86,7 +110,7 @@ export default function Landing() {
       {/* ASCM Cascade Flow */}
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 40px' }}>
         <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9.5, color: T.inkLight, letterSpacing: 1.4, marginBottom: 6, textTransform: 'uppercase' }}>ASCM MPC Framework</div>
-        <div style={{ fontFamily: 'Sora', fontWeight: 600, fontSize: 18, color: T.ink, letterSpacing: -0.3, marginBottom: 20 }}>Planning Cascade</div>
+        <h2 style={{ fontFamily: 'Sora', fontWeight: 600, fontSize: 18, color: T.ink, letterSpacing: -0.3, marginBottom: 20 }}>Planning Cascade</h2>
 
         <div style={{ display: 'flex', gap: 0, alignItems: 'stretch' }}>
           {CASCADE_STEPS.map((step, i) => (
@@ -134,6 +158,36 @@ export default function Landing() {
 
       {/* Live Cascade */}
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 40px 32px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+          <button
+            onClick={handleRunFullCascade}
+            disabled={cascadeTriggering}
+            style={{
+              background: cascadeTriggering ? T.bgDark : T.accent,
+              color: cascadeTriggering ? T.inkLight : T.white,
+              border: 'none',
+              padding: '8px 20px',
+              borderRadius: 7,
+              cursor: cascadeTriggering ? 'default' : 'pointer',
+              fontSize: 13,
+              fontWeight: 500,
+              fontFamily: 'Sora',
+              transition: 'all 0.15s',
+            }}
+          >
+            {cascadeTriggering ? 'Triggering...' : 'Run Full Cascade'}
+          </button>
+          {cascadeTriggerResult && (
+            <span style={{
+              fontFamily: 'JetBrains Mono', fontSize: 11,
+              color: cascadeTriggerResult.ok ? T.safe : T.risk,
+            }}>
+              {cascadeTriggerResult.ok
+                ? `Cascade started (${cascadeTriggerResult.planRunId})`
+                : `Error: ${cascadeTriggerResult.error}`}
+            </span>
+          )}
+        </div>
         <CascadeViz />
       </div>
 
@@ -151,7 +205,7 @@ export default function Landing() {
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 40px 32px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: '24px 28px' }}>
-            <div style={{ fontFamily: 'Sora', fontWeight: 600, fontSize: 15, color: T.ink, marginBottom: 12 }}>Deterministic Engines</div>
+            <h3 style={{ fontFamily: 'Sora', fontWeight: 600, fontSize: 15, color: T.ink, marginBottom: 12 }}>Deterministic Engines</h3>
             <div style={{ fontSize: 12, color: T.inkMid, lineHeight: 1.7 }}>
               Pure JavaScript functions — no LLM nondeterminism for planning math.
               Same answer every run. Testable, auditable, ASCM/APICS compliant.
@@ -161,7 +215,7 @@ export default function Landing() {
             </div>
           </div>
           <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: '24px 28px' }}>
-            <div style={{ fontFamily: 'Sora', fontWeight: 600, fontSize: 15, color: T.ink, marginBottom: 12 }}>AI Exception Analysis</div>
+            <h3 style={{ fontFamily: 'Sora', fontWeight: 600, fontSize: 15, color: T.ink, marginBottom: 12 }}>AI Exception Analysis</h3>
             <div style={{ fontSize: 12, color: T.inkMid, lineHeight: 1.7 }}>
               Claude analyzes engine output — exceptions, recommendations, root cause.
               AI never touches the math. Structured context per module with ASCM system prompts.
