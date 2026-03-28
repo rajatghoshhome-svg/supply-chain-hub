@@ -25,7 +25,7 @@ export default function Nav() {
           const active = path === to || path.startsWith(to + '/');
           return (
             <button key={to} onClick={() => navigate(to)} className="nb"
-              style={{ background: 'none', border: 'none', borderBottom: `1.5px solid ${active ? T.ink : 'transparent'}`, color: active ? T.ink : T.inkLight, fontWeight: active ? 500 : 400, fontSize: 13, padding: '8px 14px', cursor: 'pointer', transition: 'color 0.12s', fontFamily: 'Inter' }}>
+              style={{ background: 'none', border: 'none', borderBottom: `1.5px solid ${active ? T.ink : 'transparent'}`, color: active ? T.ink : T.inkLight, fontWeight: active ? 500 : 400, fontSize: 13, padding: '14px 14px', cursor: 'pointer', transition: 'color 0.12s', fontFamily: 'Inter', outline: 'none', minHeight: 44 }}>
               {label}
             </button>
           );

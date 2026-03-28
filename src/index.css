@@ -13,3 +13,27 @@ html {
 #root {
   min-height: 100svh;
 }
+
+/* Focus-visible ring for keyboard navigation (a11y) */
+:focus-visible {
+  outline: 2px solid #2D5A3D;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Suppress default outline for mouse clicks */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Mobile nav scroll */
+@media (max-width: 768px) {
+  nav > div:nth-child(2) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  nav > div:nth-child(2)::-webkit-scrollbar {
+    display: none;
+  }
+}
