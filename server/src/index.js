@@ -12,6 +12,7 @@ import { demandRouter } from './routes/demand.js';
 import { drpRouter } from './routes/drp.js';
 import { productionPlanRouter } from './routes/production-plan.js';
 import { schedulingRouter } from './routes/scheduling.js';
+import { networkRouter } from './routes/network.js';
 import { requestId, errorHandler } from './middleware/error-handler.js';
 
 const app = express();
@@ -34,6 +35,7 @@ app.use('/api/demand', demandRouter);
 app.use('/api/drp', drpRouter);
 app.use('/api/production-plan', productionPlanRouter);
 app.use('/api/scheduling', schedulingRouter);
+app.use('/api/network', networkRouter);
 
 // Error handling
 app.use(errorHandler);

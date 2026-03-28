@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { T } from '../styles/tokens';
 import CascadeViz from '../components/CascadeViz';
+import NetworkMap from '../components/NetworkMap';
 
 const CASCADE_STEPS = [
   { module: 'demand', label: 'Demand Plan', path: '/demand', desc: 'Statistical forecasting with 5 methods, best-fit selection, accuracy metrics' },
@@ -129,41 +130,9 @@ export default function Landing() {
         <CascadeViz />
       </div>
 
-      {/* Network Architecture */}
+      {/* Network Architecture — Interactive Map */}
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 40px 32px' }}>
-        <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: '24px 28px' }}>
-          <div style={{ fontFamily: 'Sora', fontWeight: 600, fontSize: 15, color: T.ink, marginBottom: 16 }}>Distribution Network</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20 }}>
-            {/* Suppliers */}
-            <div>
-              <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9, color: T.inkLight, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 10 }}>Suppliers (3)</div>
-              {['SUP-STEEL · Gary, IN', 'SUP-COPPER · Tucson, AZ', 'SUP-ELEC · San Jose, CA'].map(s => (
-                <div key={s} style={{ fontFamily: 'JetBrains Mono', fontSize: 11, color: T.inkMid, marginBottom: 6, paddingLeft: 12, borderLeft: `2px solid ${T.border}` }}>{s}</div>
-              ))}
-            </div>
-            {/* Plants */}
-            <div>
-              <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9, color: T.inkLight, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 10 }}>Plants (3)</div>
-              {[
-                'PLANT-NORTH · Chicago · MTR-100/150/200/300',
-                'PLANT-SOUTH · Houston · MTR-200/400/500/600',
-                'PLANT-WEST · Phoenix · MTR-700/800/900/1000',
-              ].map(s => (
-                <div key={s} style={{ fontFamily: 'JetBrains Mono', fontSize: 11, color: T.inkMid, marginBottom: 6, paddingLeft: 12, borderLeft: `2px solid ${T.accent}` }}>{s}</div>
-              ))}
-              <div style={{ fontSize: 10, color: T.warn, marginTop: 4, paddingLeft: 12 }}>
-                ⚠ MTR-200 dual-sourced — different BOMs per plant
-              </div>
-            </div>
-            {/* DCs */}
-            <div>
-              <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9, color: T.inkLight, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 10 }}>Distribution Centers (3)</div>
-              {['DC-EAST · Charlotte, NC', 'DC-CENTRAL · Dallas, TX', 'DC-WEST · Denver, CO'].map(s => (
-                <div key={s} style={{ fontFamily: 'JetBrains Mono', fontSize: 11, color: T.inkMid, marginBottom: 6, paddingLeft: 12, borderLeft: `2px solid ${T.safe}` }}>{s}</div>
-              ))}
-            </div>
-          </div>
-        </div>
+        <NetworkMap />
       </div>
 
       {/* Architecture */}
