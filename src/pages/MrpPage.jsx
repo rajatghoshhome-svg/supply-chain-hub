@@ -114,6 +114,11 @@ export default function MrpPage() {
   const [selectedPlant, setSelectedPlant] = useState('PLT-PDX');
   const [expandedBom, setExpandedBom] = useState(new Set());
   const [suggestions, setSuggestions] = useState({});
+  const [editingBomLine, setEditingBomLine] = useState(null); // { parentCode, childCode }
+  const [editBomValues, setEditBomValues] = useState({ qtyPer: '', scrapPct: '' });
+  const [addingTo, setAddingTo] = useState(null); // parentCode
+  const [newBomLine, setNewBomLine] = useState({ code: '', name: '', qtyPer: 1, scrapPct: 0 });
+  const [bomSaving, setBomSaving] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -191,6 +196,87 @@ export default function MrpPage() {
     });
   };
 
+  const refetchBom = async () => {
+    try {
+      const r = await fetch(`/api/mrp/bom?plant=${selectedPlant}`);
+      if (!r.ok) throw new Error();
+      const bom = await r.json();
+      setBomData(bom);
+    } catch {
+      // keep current data on failure
+    }
+  };
+
+  const startEditBomLine = (parentCode, child) => {
+    setEditingBomLine({ parentCode, childCode: child.code });
+    setEditBomValues({ qtyPer: child.qtyPer ?? '', scrapPct: child.scrapPct ?? 0 });
+    setAddingTo(null);
+  };
+
+  const saveBomEdit = async () => {
+    if (!editingBomLine) return;
+    setBomSaving(true);
+    try {
+      const res = await fetch('/api/mrp/bom', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plant: selectedPlant,
+          parentCode: editingBomLine.parentCode,
+          childCode: editingBomLine.childCode,
+          qtyPer: parseFloat(editBomValues.qtyPer),
+          scrapPct: parseFloat(editBomValues.scrapPct) || 0,
+        }),
+      });
+      if (res.ok) await refetchBom();
+    } catch {
+      // silently fail for static/Vercel mode
+    }
+    setEditingBomLine(null);
+    setBomSaving(false);
+  };
+
+  const deleteBomLine = async (parentCode, childCode) => {
+    if (!window.confirm(`Delete component ${childCode} from ${parentCode}?`)) return;
+    setBomSaving(true);
+    try {
+      const res = await fetch('/api/mrp/bom', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plant: selectedPlant, parentCode, childCode }),
+      });
+      if (res.ok) await refetchBom();
+    } catch {
+      // silently fail for static/Vercel mode
+    }
+    setBomSaving(false);
+  };
+
+  const addBomLine = async (parentCode) => {
+    if (!newBomLine.code) return;
+    setBomSaving(true);
+    try {
+      const res = await fetch('/api/mrp/bom', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plant: selectedPlant,
+          parentCode,
+          childCode: newBomLine.code,
+          childName: newBomLine.name,
+          qtyPer: parseFloat(newBomLine.qtyPer) || 1,
+          scrapPct: parseFloat(newBomLine.scrapPct) || 0,
+        }),
+      });
+      if (res.ok) await refetchBom();
+    } catch {
+      // silently fail for static/Vercel mode
+    }
+    setAddingTo(null);
+    setNewBomLine({ code: '', name: '', qtyPer: 1, scrapPct: 0 });
+    setBomSaving(false);
+  };
+
   return (
     <ModuleLayout moduleContext="mrp" tabs={TABS} activeTab={tab} onTabChange={setTab}>
       <PageHeader title="Material Requirements Planning" subtitle="MRP" />
@@ -266,6 +352,19 @@ export default function MrpPage() {
                     expanded={expandedBom}
                     onToggle={toggleBomExpand}
                     selectedPlant={selectedPlant}
+                    editingBomLine={editingBomLine}
+                    editBomValues={editBomValues}
+                    setEditBomValues={setEditBomValues}
+                    onStartEdit={startEditBomLine}
+                    onSaveEdit={saveBomEdit}
+                    onCancelEdit={() => setEditingBomLine(null)}
+                    onDelete={deleteBomLine}
+                    addingTo={addingTo}
+                    setAddingTo={setAddingTo}
+                    newBomLine={newBomLine}
+                    setNewBomLine={setNewBomLine}
+                    onAddLine={addBomLine}
+                    bomSaving={bomSaving}
                   />
                 ))}
 
@@ -468,108 +567,188 @@ function fmt(v) {
 
 // ─── BOM Tree Node ────────────────────────────────────────────────
 
-function BomNode({ node, depth, expanded, onToggle, selectedPlant }) {
+function BomNode({ node, depth, expanded, onToggle, selectedPlant, parentCode,
+  editingBomLine, editBomValues, setEditBomValues, onStartEdit, onSaveEdit, onCancelEdit,
+  onDelete, addingTo, setAddingTo, newBomLine, setNewBomLine, onAddLine, bomSaving,
+}) {
   const hasChildren = node.children && node.children.length > 0;
   const isExpanded = expanded.has(node.code);
   const levelCfg = LEVEL_COLORS[node.level] || LEVEL_COLORS[2];
   const isDualSource = node.code === 'PRO-BAR';
+  const isEditing = editingBomLine && editingBomLine.parentCode === parentCode && editingBomLine.childCode === node.code;
+  const isChild = depth > 0;
 
   return (
     <div>
-      {/* Node row */}
-      <div
-        onClick={() => hasChildren && onToggle(node.code)}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: `8px 20px 8px ${20 + depth * 28}px`,
-          cursor: hasChildren ? 'pointer' : 'default',
-          borderBottom: `1px solid ${T.border}`,
-          background: depth === 0 ? T.bgDark : 'transparent',
-          transition: 'background 0.1s',
-        }}
-        onMouseEnter={e => { if (hasChildren) e.currentTarget.style.background = T.bgDark; }}
-        onMouseLeave={e => { if (depth > 0) e.currentTarget.style.background = 'transparent'; }}
-      >
-        {/* Expand/collapse indicator */}
-        <span style={{
-          width: 16, textAlign: 'center', fontSize: 10, color: T.inkLight,
-          fontFamily: 'JetBrains Mono',
+      {/* Edit inline row */}
+      {isEditing ? (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: `6px 20px 6px ${20 + depth * 28}px`,
+          borderBottom: `1px solid ${T.border}`, background: `${T.accent}08`,
         }}>
-          {hasChildren ? (isExpanded ? '▼' : '▶') : (depth > 0 ? '└' : '')}
-        </span>
+          <span style={{ fontFamily: 'JetBrains Mono', fontSize: 11, fontWeight: 600, color: T.ink, minWidth: 90 }}>
+            {node.code}
+          </span>
+          <span style={{ fontSize: 11, color: T.inkMid }}>{node.name}</span>
+          <span style={{ fontSize: 10, color: T.inkLight, marginLeft: 8 }}>Qty:</span>
+          <input
+            type="number"
+            step="0.1"
+            value={editBomValues.qtyPer}
+            onChange={e => setEditBomValues(prev => ({ ...prev, qtyPer: e.target.value }))}
+            style={{
+              width: 60, fontFamily: 'JetBrains Mono', fontSize: 11, padding: '3px 6px',
+              border: `1px solid ${T.accent}`, borderRadius: 4, textAlign: 'right',
+            }}
+          />
+          <span style={{ fontSize: 10, color: T.inkLight }}>Scrap%:</span>
+          <input
+            type="number"
+            step="0.1"
+            value={editBomValues.scrapPct}
+            onChange={e => setEditBomValues(prev => ({ ...prev, scrapPct: e.target.value }))}
+            style={{
+              width: 50, fontFamily: 'JetBrains Mono', fontSize: 11, padding: '3px 6px',
+              border: `1px solid ${T.accent}`, borderRadius: 4, textAlign: 'right',
+            }}
+          />
+          <button
+            onClick={onSaveEdit}
+            disabled={bomSaving}
+            style={{
+              background: T.safe, color: T.white, border: 'none', borderRadius: 4,
+              padding: '3px 10px', fontSize: 10, fontWeight: 600, cursor: 'pointer',
+              fontFamily: 'JetBrains Mono',
+            }}
+          >Save</button>
+          <button
+            onClick={onCancelEdit}
+            style={{
+              background: T.bgDark, color: T.inkMid, border: `1px solid ${T.border}`, borderRadius: 4,
+              padding: '3px 10px', fontSize: 10, fontWeight: 600, cursor: 'pointer',
+              fontFamily: 'JetBrains Mono',
+            }}
+          >Cancel</button>
+        </div>
+      ) : (
+        /* Node row */
+        <div
+          onClick={() => hasChildren && onToggle(node.code)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: `8px 20px 8px ${20 + depth * 28}px`,
+            cursor: hasChildren ? 'pointer' : 'default',
+            borderBottom: `1px solid ${T.border}`,
+            background: depth === 0 ? T.bgDark : 'transparent',
+            transition: 'background 0.1s',
+          }}
+          onMouseEnter={e => { if (hasChildren) e.currentTarget.style.background = T.bgDark; }}
+          onMouseLeave={e => { if (depth > 0) e.currentTarget.style.background = 'transparent'; }}
+        >
+          {/* Expand/collapse indicator */}
+          <span style={{
+            width: 16, textAlign: 'center', fontSize: 10, color: T.inkLight,
+            fontFamily: 'JetBrains Mono',
+          }}>
+            {hasChildren ? (isExpanded ? '\u25BC' : '\u25B6') : (depth > 0 ? '\u2514' : '')}
+          </span>
 
-        {/* Level badge */}
-        <span style={{
-          display: 'inline-block', padding: '1px 6px', borderRadius: 3,
-          background: levelCfg.bg, color: levelCfg.text,
-          fontSize: 8, fontWeight: 600, fontFamily: 'JetBrains Mono',
-          letterSpacing: 0.5, minWidth: 28, textAlign: 'center',
-        }}>
-          {levelCfg.label}
-        </span>
+          {/* Level badge */}
+          <span style={{
+            display: 'inline-block', padding: '1px 6px', borderRadius: 3,
+            background: levelCfg.bg, color: levelCfg.text,
+            fontSize: 8, fontWeight: 600, fontFamily: 'JetBrains Mono',
+            letterSpacing: 0.5, minWidth: 28, textAlign: 'center',
+          }}>
+            {levelCfg.label}
+          </span>
 
-        {/* Code */}
-        <span style={{
-          fontFamily: 'JetBrains Mono', fontSize: 12, fontWeight: 600,
-          color: T.ink, minWidth: 90,
-        }}>
-          {node.code}
-          {isDualSource && (
-            <span style={{ marginLeft: 6, fontSize: 9, color: T.warn, fontWeight: 400 }}>
-              DUAL
+          {/* Code */}
+          <span style={{
+            fontFamily: 'JetBrains Mono', fontSize: 12, fontWeight: 600,
+            color: T.ink, minWidth: 90,
+          }}>
+            {node.code}
+            {isDualSource && (
+              <span style={{ marginLeft: 6, fontSize: 9, color: T.warn, fontWeight: 400 }}>
+                DUAL
+              </span>
+            )}
+          </span>
+
+          {/* Name */}
+          <span style={{ fontSize: 12, color: T.inkMid, flex: 1 }}>
+            {node.name}
+          </span>
+
+          {/* Qty per (for children) */}
+          {node.qtyPer != null && (
+            <span style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkMid, minWidth: 50, textAlign: 'right' }}>
+              \u00D7{node.qtyPer}
             </span>
           )}
-        </span>
 
-        {/* Name */}
-        <span style={{ fontSize: 12, color: T.inkMid, flex: 1 }}>
-          {node.name}
-        </span>
+          {/* Scrap */}
+          {node.scrapPct > 0 && (
+            <span style={{
+              fontFamily: 'JetBrains Mono', fontSize: 9, color: T.warn,
+              background: T.warnBg, padding: '1px 5px', borderRadius: 3,
+            }}>
+              {node.scrapPct}% scrap
+            </span>
+          )}
 
-        {/* Qty per (for children) */}
-        {node.qtyPer != null && (
-          <span style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkMid, minWidth: 50, textAlign: 'right' }}>
-            ×{node.qtyPer}
+          {/* Lead time */}
+          <span style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkLight, minWidth: 40, textAlign: 'right' }}>
+            {node.leadTime}wk
           </span>
-        )}
 
-        {/* Scrap */}
-        {node.scrapPct > 0 && (
+          {/* Lot sizing */}
           <span style={{
-            fontFamily: 'JetBrains Mono', fontSize: 9, color: T.warn,
-            background: T.warnBg, padding: '1px 5px', borderRadius: 3,
+            fontFamily: 'JetBrains Mono', fontSize: 9, color: T.inkGhost,
+            minWidth: 50, textAlign: 'right',
           }}>
-            {node.scrapPct}% scrap
+            {node.lotSizing === 'lot-for-lot' ? 'L4L' :
+             node.lotSizing === 'fixed-order-qty' ? 'FOQ' :
+             node.lotSizing === 'eoq' ? 'EOQ' :
+             node.lotSizing === 'period-order-qty' ? 'POQ' :
+             node.lotSizing || '\u2014'}
           </span>
-        )}
 
-        {/* Lead time */}
-        <span style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkLight, minWidth: 40, textAlign: 'right' }}>
-          {node.leadTime}wk
-        </span>
+          {/* On hand */}
+          <span style={{
+            fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkMid,
+            minWidth: 50, textAlign: 'right',
+          }}>
+            OH:{node.onHand ?? 0}
+          </span>
 
-        {/* Lot sizing */}
-        <span style={{
-          fontFamily: 'JetBrains Mono', fontSize: 9, color: T.inkGhost,
-          minWidth: 50, textAlign: 'right',
-        }}>
-          {node.lotSizing === 'lot-for-lot' ? 'L4L' :
-           node.lotSizing === 'fixed-order-qty' ? 'FOQ' :
-           node.lotSizing === 'eoq' ? 'EOQ' :
-           node.lotSizing === 'period-order-qty' ? 'POQ' :
-           node.lotSizing || '—'}
-        </span>
-
-        {/* On hand */}
-        <span style={{
-          fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkMid,
-          minWidth: 50, textAlign: 'right',
-        }}>
-          OH:{node.onHand ?? 0}
-        </span>
-      </div>
+          {/* Edit / Delete buttons for child nodes */}
+          {isChild && parentCode && (
+            <span style={{ display: 'flex', gap: 4, marginLeft: 8 }} onClick={e => e.stopPropagation()}>
+              <button
+                onClick={() => onStartEdit(parentCode, node)}
+                style={{
+                  background: T.white, color: T.accent, border: `1px solid ${T.accent}33`,
+                  borderRadius: 3, padding: '2px 6px', fontSize: 9, cursor: 'pointer',
+                  fontFamily: 'JetBrains Mono', fontWeight: 600,
+                }}
+              >Edit</button>
+              <button
+                onClick={() => onDelete(parentCode, node.code)}
+                style={{
+                  background: T.white, color: T.risk, border: `1px solid ${T.risk}33`,
+                  borderRadius: 3, padding: '2px 6px', fontSize: 9, cursor: 'pointer',
+                  fontFamily: 'JetBrains Mono', fontWeight: 600,
+                }}
+              >Del</button>
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Children */}
       {hasChildren && isExpanded && (
@@ -582,8 +761,105 @@ function BomNode({ node, depth, expanded, onToggle, selectedPlant }) {
               expanded={expanded}
               onToggle={onToggle}
               selectedPlant={selectedPlant}
+              parentCode={node.code}
+              editingBomLine={editingBomLine}
+              editBomValues={editBomValues}
+              setEditBomValues={setEditBomValues}
+              onStartEdit={onStartEdit}
+              onSaveEdit={onSaveEdit}
+              onCancelEdit={onCancelEdit}
+              onDelete={onDelete}
+              addingTo={addingTo}
+              setAddingTo={setAddingTo}
+              newBomLine={newBomLine}
+              setNewBomLine={setNewBomLine}
+              onAddLine={onAddLine}
+              bomSaving={bomSaving}
             />
           ))}
+
+          {/* Add Component row */}
+          {addingTo === node.code ? (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: `6px 20px 6px ${20 + (depth + 1) * 28}px`,
+              borderBottom: `1px solid ${T.border}`, background: `${T.safe}08`,
+            }}>
+              <input
+                placeholder="Code"
+                value={newBomLine.code}
+                onChange={e => setNewBomLine(prev => ({ ...prev, code: e.target.value }))}
+                style={{
+                  width: 80, fontFamily: 'JetBrains Mono', fontSize: 11, padding: '3px 6px',
+                  border: `1px solid ${T.border}`, borderRadius: 4,
+                }}
+              />
+              <input
+                placeholder="Name"
+                value={newBomLine.name}
+                onChange={e => setNewBomLine(prev => ({ ...prev, name: e.target.value }))}
+                style={{
+                  width: 140, fontSize: 11, padding: '3px 6px',
+                  border: `1px solid ${T.border}`, borderRadius: 4,
+                }}
+              />
+              <span style={{ fontSize: 10, color: T.inkLight }}>Qty:</span>
+              <input
+                type="number"
+                step="0.1"
+                value={newBomLine.qtyPer}
+                onChange={e => setNewBomLine(prev => ({ ...prev, qtyPer: e.target.value }))}
+                style={{
+                  width: 50, fontFamily: 'JetBrains Mono', fontSize: 11, padding: '3px 6px',
+                  border: `1px solid ${T.border}`, borderRadius: 4, textAlign: 'right',
+                }}
+              />
+              <span style={{ fontSize: 10, color: T.inkLight }}>Scrap%:</span>
+              <input
+                type="number"
+                step="0.1"
+                value={newBomLine.scrapPct}
+                onChange={e => setNewBomLine(prev => ({ ...prev, scrapPct: e.target.value }))}
+                style={{
+                  width: 45, fontFamily: 'JetBrains Mono', fontSize: 11, padding: '3px 6px',
+                  border: `1px solid ${T.border}`, borderRadius: 4, textAlign: 'right',
+                }}
+              />
+              <button
+                onClick={() => onAddLine(node.code)}
+                disabled={bomSaving || !newBomLine.code}
+                style={{
+                  background: T.safe, color: T.white, border: 'none', borderRadius: 4,
+                  padding: '3px 10px', fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                  fontFamily: 'JetBrains Mono', opacity: !newBomLine.code ? 0.5 : 1,
+                }}
+              >Add</button>
+              <button
+                onClick={() => setAddingTo(null)}
+                style={{
+                  background: T.bgDark, color: T.inkMid, border: `1px solid ${T.border}`, borderRadius: 4,
+                  padding: '3px 10px', fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                  fontFamily: 'JetBrains Mono',
+                }}
+              >Cancel</button>
+            </div>
+          ) : (
+            <div
+              style={{
+                padding: `4px 20px 4px ${20 + (depth + 1) * 28}px`,
+                borderBottom: `1px solid ${T.border}`,
+              }}
+            >
+              <button
+                onClick={() => { setAddingTo(node.code); setNewBomLine({ code: '', name: '', qtyPer: 1, scrapPct: 0 }); }}
+                style={{
+                  background: 'transparent', color: T.accent, border: `1px dashed ${T.accent}44`,
+                  borderRadius: 4, padding: '2px 10px', fontSize: 10, cursor: 'pointer',
+                  fontFamily: 'JetBrains Mono', fontWeight: 500,
+                }}
+              >+ Add Component</button>
+            </div>
+          )}
         </div>
       )}
     </div>

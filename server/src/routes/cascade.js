@@ -10,6 +10,7 @@
 import { Router } from 'express';
 import { cascade } from '../services/cascade.js';
 import { triggerFullCascade } from '../services/cascade-handlers.js';
+import { calculateFinancialImpact } from '../services/financial-impact.js';
 import { runDRP } from '../engines/drp-engine.js';
 import { runProductionPlan, roughCutCapacity } from '../engines/prod-plan-engine.js';
 import { runScheduler } from '../engines/sched-engine.js';
@@ -29,6 +30,9 @@ import {
 import { plantBOMs, getSkuByCode } from '../services/data-provider.js';
 
 export const cascadeRouter = Router();
+
+// ─── In-memory scenario store ────────────────────────────────
+const savedScenarios = [];
 
 // ─── Helper: make 8 weekly periods ─────────────────────────────
 
@@ -367,7 +371,42 @@ cascadeRouter.post('/scenario', (req, res) => {
   try {
     const { demandMultiplier = 1.0, label = 'Scenario' } = req.body || {};
     const results = runScenario(demandMultiplier);
-    res.json({ label, multiplier: demandMultiplier, ...results });
+    const financialImpact = calculateFinancialImpact(results);
+    res.json({
+      id: Date.now(),
+      label,
+      multiplier: demandMultiplier,
+      ...results,
+      financialImpact,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/cascade/scenarios — return last 10 saved scenarios
+cascadeRouter.get('/scenarios', (req, res) => {
+  res.json({ scenarios: savedScenarios.slice(-10) });
+});
+
+// POST /api/cascade/scenarios/save — save a labeled scenario
+cascadeRouter.post('/scenarios/save', (req, res) => {
+  try {
+    const { demandMultiplier = 1.0, label = 'Scenario' } = req.body || {};
+    const results = runScenario(demandMultiplier);
+    const financialImpact = calculateFinancialImpact(results);
+    const scenario = {
+      id: Date.now(),
+      label,
+      multiplier: demandMultiplier,
+      savedAt: new Date().toISOString(),
+      ...results,
+      financialImpact,
+    };
+    savedScenarios.push(scenario);
+    // Keep only the last 50 to avoid unbounded growth
+    if (savedScenarios.length > 50) savedScenarios.splice(0, savedScenarios.length - 50);
+    res.json({ status: 'ok', scenario });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

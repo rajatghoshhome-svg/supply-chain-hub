@@ -25,6 +25,9 @@ import { triggerFullCascade } from '../services/cascade-handlers.js';
 
 export const demandRouter = Router();
 
+// ─── In-memory override store (keyed by skuCode) ─────────────
+const demandOverrides = {};
+
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const MODEL = 'claude-sonnet-4-5-20250514';
 
@@ -257,4 +260,56 @@ demandRouter.post('/demo/:skuCode/analyze', async (req, res, next) => {
       res.end();
     }
   }
+});
+
+// ─── PUT /api/demand/override — persist planner overrides and trigger cascade ──
+
+demandRouter.put('/override', async (req, res, next) => {
+  try {
+    const { skuCode, overrides } = req.body;
+    // overrides is { "2026-04-07": 550, "2026-04-14": 600 }
+    if (!skuCode || !overrides || Object.keys(overrides).length === 0) {
+      throw new ValidationError('skuCode and overrides object required');
+    }
+
+    // Store overrides in memory (keyed by skuCode)
+    if (!demandOverrides[skuCode]) demandOverrides[skuCode] = {};
+    Object.assign(demandOverrides[skuCode], overrides);
+
+    // Trigger cascade with the override values
+    const cascadeResult = await triggerFullCascade({
+      triggeredBy: 'demand-override',
+      demandOverrides: { [skuCode]: overrides },
+    });
+
+    res.json({
+      status: 'ok',
+      skuCode,
+      overrides: demandOverrides[skuCode],
+      cascade: {
+        triggered: true,
+        planRunId: cascadeResult.planRunId,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── GET /api/demand/overrides/:skuCode — retrieve saved overrides ──
+
+demandRouter.get('/overrides/:skuCode', (req, res) => {
+  const overrides = demandOverrides[req.params.skuCode] || {};
+  res.json({ skuCode: req.params.skuCode, overrides });
+});
+
+// ─── GET /api/demand/overrides — list all SKUs with overrides ──
+
+demandRouter.get('/overrides', (req, res) => {
+  const result = Object.entries(demandOverrides).map(([skuCode, overrides]) => ({
+    skuCode,
+    overrides,
+    periodCount: Object.keys(overrides).length,
+  }));
+  res.json({ overrides: result });
 });

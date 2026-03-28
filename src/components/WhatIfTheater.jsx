@@ -146,9 +146,20 @@ export default function WhatIfTheater() {
           })
         )
       );
-      setResults(responses);
+      // API returns financialImpact as nested object; flatten for METRIC_ROWS extraction
+      const normalized = responses.map(r => ({
+        label: r.label,
+        multiplier: r.multiplier,
+        ...(r.financialImpact || {}),
+        // Keep top-level cascade data too
+        drp: r.drp,
+        production: r.production,
+        scheduling: r.scheduling,
+        mrp: r.mrp,
+      }));
+      setResults(normalized);
     } catch (err) {
-      // Vercel fallback -- generate synthetic scenario data
+      // Fallback: generate synthetic scenario data only when API is completely unavailable
       const staticResults = scenarios.map(s => generateStaticScenario(s.multiplier, s.label));
       setResults(staticResults);
     } finally {

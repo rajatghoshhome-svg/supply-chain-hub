@@ -401,6 +401,84 @@ mrpRouter.get('/bom', (req, res) => {
   }
 });
 
+// ─── POST /api/mrp/bom — Add a BOM line ────────────────────────────
+mrpRouter.post('/bom', (req, res) => {
+  try {
+    const { plant, parentCode, childCode, qtyPer, scrapPct = 0 } = req.body;
+    if (!plant || !parentCode || !childCode || !qtyPer) {
+      return res.status(400).json({ error: 'plant, parentCode, childCode, and qtyPer are required' });
+    }
+
+    const bom = plantBOMs[plant];
+    if (!bom) return res.status(404).json({ error: `No BOM for plant ${plant}` });
+
+    if (!bom[parentCode]) bom[parentCode] = [];
+
+    // Check for duplicate
+    const existing = bom[parentCode].find(c => c.childCode === childCode);
+    if (existing) {
+      return res.status(409).json({ error: `${childCode} already exists under ${parentCode}` });
+    }
+
+    bom[parentCode].push({ childCode, qtyPer: Number(qtyPer), scrapPct: Number(scrapPct) });
+
+    res.status(201).json({ status: 'ok', parentCode, childCode, qtyPer, scrapPct });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PUT /api/mrp/bom — Update a BOM line ──────────────────────────
+mrpRouter.put('/bom', (req, res) => {
+  try {
+    const { plant, parentCode, childCode, qtyPer, scrapPct } = req.body;
+    if (!plant || !parentCode || !childCode) {
+      return res.status(400).json({ error: 'plant, parentCode, and childCode are required' });
+    }
+
+    const bom = plantBOMs[plant];
+    if (!bom) return res.status(404).json({ error: `No BOM for plant ${plant}` });
+
+    const children = bom[parentCode];
+    if (!children) return res.status(404).json({ error: `No BOM entries for ${parentCode}` });
+
+    const line = children.find(c => c.childCode === childCode);
+    if (!line) return res.status(404).json({ error: `${childCode} not found under ${parentCode}` });
+
+    if (qtyPer !== undefined) line.qtyPer = Number(qtyPer);
+    if (scrapPct !== undefined) line.scrapPct = Number(scrapPct);
+
+    res.json({ status: 'ok', parentCode, childCode, qtyPer: line.qtyPer, scrapPct: line.scrapPct });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── DELETE /api/mrp/bom — Remove a BOM line ───────────────────────
+mrpRouter.delete('/bom', (req, res) => {
+  try {
+    const { plant, parentCode, childCode } = req.body;
+    if (!plant || !parentCode || !childCode) {
+      return res.status(400).json({ error: 'plant, parentCode, and childCode are required' });
+    }
+
+    const bom = plantBOMs[plant];
+    if (!bom) return res.status(404).json({ error: `No BOM for plant ${plant}` });
+
+    const children = bom[parentCode];
+    if (!children) return res.status(404).json({ error: `No BOM entries for ${parentCode}` });
+
+    const idx = children.findIndex(c => c.childCode === childCode);
+    if (idx === -1) return res.status(404).json({ error: `${childCode} not found under ${parentCode}` });
+
+    children.splice(idx, 1);
+
+    res.json({ status: 'ok', removed: childCode, parentCode });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── POST /api/mrp/run — Custom data ────────────────────────────
 
 mrpRouter.post('/run', (req, res) => {

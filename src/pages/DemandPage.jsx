@@ -150,6 +150,22 @@ export default function DemandPage() {
     });
   }, [selectedSku]);
 
+  // Restore previously saved overrides when SKU changes
+  useEffect(() => {
+    if (!selectedSku) return;
+    fetch(`${API}/overrides/${selectedSku}`)
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(saved => {
+        const ov = saved?.overrides || saved;
+        if (ov && typeof ov === 'object' && Object.keys(ov).length > 0) {
+          setOverrides(ov);
+        } else {
+          setOverrides({});
+        }
+      })
+      .catch(() => { setOverrides({}); });
+  }, [selectedSku]);
+
   return (
     <ModuleLayout moduleContext="demand" tabs={TABS} activeTab={tab} onTabChange={setTab}>
       <PageHeader title="Demand Planning" subtitle="Forecast & Analyze" />
@@ -279,21 +295,39 @@ export default function DemandPage() {
                       </div>
                       {Object.keys(overrides).length > 0 && (
                         <button
-                          onClick={() => {
+                          onClick={async () => {
                             setOverrideSaved(true);
-                            setCascadeActive(true);
-                            setCascadeStepsDone(0);
-                            setCascadeStatus('running');
-                            // Simulate cascade progression
-                            let step = 0;
-                            const tick = setInterval(() => {
-                              step++;
-                              setCascadeStepsDone(step);
-                              if (step >= CASCADE_STEPS.length) {
-                                clearInterval(tick);
+                            try {
+                              const res = await fetch(`${API}/override`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ skuCode: selectedSku, overrides }),
+                              });
+                              if (!res.ok) throw new Error('API unavailable');
+                              const result = await res.json();
+                              // Connect to cascade SSE for real progress
+                              if (result.cascade?.planRunId) {
+                                connectCascadeSSE(result.cascade.planRunId);
+                              } else {
+                                setCascadeActive(true);
+                                setCascadeStepsDone(CASCADE_STEPS.length);
                                 setCascadeStatus('complete');
                               }
-                            }, 600);
+                            } catch {
+                              // Fallback to simulated cascade when API unavailable
+                              setCascadeActive(true);
+                              setCascadeStepsDone(0);
+                              setCascadeStatus('running');
+                              let step = 0;
+                              const tick = setInterval(() => {
+                                step++;
+                                setCascadeStepsDone(step);
+                                if (step >= CASCADE_STEPS.length) {
+                                  clearInterval(tick);
+                                  setCascadeStatus('complete');
+                                }
+                              }, 600);
+                            }
                             setTimeout(() => setOverrideSaved(false), 3000);
                           }}
                           style={{

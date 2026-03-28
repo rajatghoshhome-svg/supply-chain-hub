@@ -14,7 +14,7 @@
  */
 
 import { Router } from 'express';
-import { runScheduler } from '../engines/sched-engine.js';
+import { runScheduler, forwardSchedule, calculateMakespan } from '../engines/sched-engine.js';
 import { runProductionPlan } from '../engines/prod-plan-engine.js';
 import { runDRP } from '../engines/drp-engine.js';
 import { buildSchedulingContext } from '../services/ai-context/scheduling-context.js';
@@ -100,13 +100,16 @@ schedulingRouter.get('/demo', (req, res) => {
 
       for (let i = 0; i < periods.length; i++) {
         if (production[i] > 0) {
+          // Offset due date by +2 periods so orders have realistic lead time
+          // This yields ~30-40% late orders instead of nearly 100%
+          const duePeriodIdx = Math.min(i + 2, periods.length - 1);
           allOrders.push({
             id: `PO-${String(orderIdx++).padStart(3, '0')}`,
             skuCode,
             skuName: prod?.name,
             qty: production[i],
             processingTime: Math.round(production[i] * hrsPerUnit * 10) / 10,
-            dueDate: periods[i],
+            dueDate: periods[duePeriodIdx],
             workCenter: wcData?.code || 'WC-ASSEMBLY',
             priority: 'normal',
           });
@@ -190,10 +193,11 @@ schedulingRouter.post('/demo/analyze', async (req, res) => {
       const hrsPerUnit = wcData?.hoursPerUnit?.[family?.code] || 1.0;
       for (let i = 0; i < periods.length; i++) {
         if (production[i] > 0) {
+          const duePeriodIdx = Math.min(i + 2, periods.length - 1);
           allOrders.push({
             id: `PO-${String(orderIdx++).padStart(3, '0')}`, skuCode, skuName: prod?.name,
             qty: production[i], processingTime: Math.round(production[i] * hrsPerUnit * 10) / 10,
-            dueDate: periods[i], workCenter: wcData?.code || 'WC-ASSEMBLY', priority: 'normal',
+            dueDate: periods[duePeriodIdx], workCenter: wcData?.code || 'WC-ASSEMBLY', priority: 'normal',
           });
         }
       }
@@ -272,6 +276,102 @@ schedulingRouter.post('/run', (req, res) => {
       changeoverTime: changeoverTime || 0,
       compareRules: compareRules || false,
     }));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PUT /api/scheduling/resequence — Manually reorder production orders ─
+schedulingRouter.put('/resequence', (req, res) => {
+  try {
+    const { plant, orderIds, orders: incomingOrders } = req.body;
+    if (!plant || !orderIds || !Array.isArray(orderIds)) {
+      return res.status(400).json({ error: 'plant and orderIds array are required' });
+    }
+
+    // The frontend sends the full order list; resequence uses orderIds to define new order
+    // If orders aren't provided, run the demo schedule to get them
+    let sourceOrders = incomingOrders;
+    if (!sourceOrders) {
+      const periods = makePeriods(8);
+      const dcCodes = getDCs().map(d => d.code);
+      const plantProducts = getProductsForPlant(plant);
+      const plantGrossReqs = {};
+
+      for (const skuCode of plantProducts) {
+        const locations = [];
+        for (const dc of dcCodes) {
+          const inv = dcInventory[dc]?.[skuCode];
+          const demand = dcDemandForecast[dc]?.[skuCode];
+          if (!inv || !demand) continue;
+          const lane = getBestSourceForDC(dc, skuCode);
+          if (!lane || lane.source !== plant) continue;
+          locations.push({
+            code: dc, onHand: inv.onHand, safetyStock: inv.safetyStock,
+            scheduledReceipts: inv.scheduledReceipts || periods.map(() => 0),
+            grossReqs: demand, transitLeadTime: lane.leadTimePeriods, sourceCode: lane.source,
+          });
+        }
+        if (locations.length === 0) continue;
+        const drpResult = runDRP({ skuCode, periods, locations });
+        plantGrossReqs[skuCode] = drpResult.plantRequirements?.grossReqs || new Array(8).fill(0);
+      }
+
+      const allOrders = [];
+      let orderIdx = 1;
+      for (const skuCode of plantProducts) {
+        const grossReqs = plantGrossReqs[skuCode] || new Array(8).fill(0);
+        const inv = plantInventory[plant]?.[skuCode] || { onHand: 0 };
+        const prod = products.find(p => p.code === skuCode);
+        const family = productFamilies.find(f => f.products.includes(skuCode));
+        const plan = runProductionPlan({ periods, grossReqs, beginningInventory: inv.onHand, costPerUnit: prod?.unitCost || 100 });
+        const production = plan.strategies.chase.production;
+        const wcData = (plantWorkCenters[plant] || [])[1];
+        const hrsPerUnit = wcData?.hoursPerUnit?.[family?.code] || 1.0;
+        for (let i = 0; i < periods.length; i++) {
+          if (production[i] > 0) {
+            const duePeriodIdx = Math.min(i + 2, periods.length - 1);
+            allOrders.push({
+              id: `PO-${String(orderIdx++).padStart(3, '0')}`, skuCode, skuName: prod?.name,
+              qty: production[i], processingTime: Math.round(production[i] * hrsPerUnit * 10) / 10,
+              dueDate: periods[duePeriodIdx], workCenter: wcData?.code || 'WC-ASSEMBLY', priority: 'normal',
+            });
+          }
+        }
+      }
+      sourceOrders = allOrders;
+    }
+
+    // Reorder based on provided orderIds
+    const reordered = [];
+    for (const id of orderIds) {
+      const order = sourceOrders.find(o => o.id === id);
+      if (order) reordered.push(order);
+    }
+
+    if (reordered.length === 0) {
+      return res.status(404).json({ error: 'No matching orders found for the provided orderIds' });
+    }
+
+    // Use the engine's forwardSchedule to recalculate timing
+    const schedule = forwardSchedule({
+      orders: reordered,
+      capacityHoursPerDay: 8,
+      changeoverTime: 1,
+    });
+
+    const makespan = calculateMakespan(schedule);
+    const lateOrders = schedule.filter(o => o.late).length;
+
+    res.json({
+      status: 'ok',
+      plant,
+      rule: 'MANUAL',
+      totalOrders: schedule.length,
+      makespan,
+      lateOrders,
+      schedule,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

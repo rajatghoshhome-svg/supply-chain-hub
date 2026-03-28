@@ -43,6 +43,9 @@ export default function SchedulingPage() {
   const [loading, setLoading] = useState(true);
   const [rule, setRule] = useState('EDD');
   const [plant, setPlant] = useState('PLT-PDX');
+  const [draggedIdx, setDraggedIdx] = useState(null);
+  const [dragOverIdx, setDragOverIdx] = useState(null);
+  const [resequencing, setResequencing] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -124,17 +127,92 @@ export default function SchedulingPage() {
           <Card title="Scheduled Production Orders">
             {data?.schedule ? (
               <div style={{ overflowX: 'auto' }}>
+                {/* Reset + resequence info */}
+                <div style={{ display: 'flex', gap: 8, padding: '8px 10px', alignItems: 'center' }}>
+                  <span style={{ fontSize: 10, color: T.inkLight, fontFamily: 'JetBrains Mono' }}>
+                    Drag rows to resequence
+                  </span>
+                  <button
+                    onClick={() => {
+                      setLoading(true);
+                      fetch(`/api/scheduling/demo?rule=${rule}&plant=${plant}`)
+                        .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+                        .then(d => { setData(d); setLoading(false); })
+                        .catch(() => { setData(STATIC_SCHEDULE); setLoading(false); });
+                    }}
+                    style={{
+                      background: T.white, color: T.ink, border: `1px solid ${T.border}`,
+                      borderRadius: 4, padding: '3px 10px', fontSize: 10, cursor: 'pointer',
+                      fontFamily: 'JetBrains Mono', fontWeight: 500,
+                    }}
+                  >
+                    Reset to {rule}
+                  </button>
+                  {resequencing && (
+                    <span style={{ fontSize: 10, color: T.accent, fontFamily: 'JetBrains Mono' }}>Saving...</span>
+                  )}
+                </div>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, fontFamily: 'JetBrains Mono' }}>
                   <thead>
                     <tr style={{ borderBottom: `2px solid ${T.border}` }}>
-                      {['Order', 'SKU', 'Qty', 'Proc Time', 'Start', 'End', 'Due Date', 'Status'].map(h => (
-                        <th key={h} scope="col" style={{ textAlign: h === 'Order' || h === 'SKU' || h === 'Status' ? 'left' : 'right', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
+                      {['#', 'Order', 'SKU', 'Qty', 'Proc Time', 'Start', 'End', 'Due Date', 'Status'].map(h => (
+                        <th key={h} scope="col" style={{ textAlign: h === '#' || h === 'Order' || h === 'SKU' || h === 'Status' ? 'left' : 'right', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {data.schedule.map(o => (
-                      <tr key={o.id} style={{ borderBottom: `1px solid ${T.border}`, background: o.late ? T.riskBg : 'transparent' }}>
+                    {data.schedule.map((o, idx) => (
+                      <tr
+                        key={o.id}
+                        draggable="true"
+                        onDragStart={() => setDraggedIdx(idx)}
+                        onDragEnd={() => { setDraggedIdx(null); setDragOverIdx(null); }}
+                        onDragOver={(e) => { e.preventDefault(); setDragOverIdx(idx); }}
+                        onDrop={async (e) => {
+                          e.preventDefault();
+                          if (draggedIdx === null || draggedIdx === idx) return;
+                          const newSchedule = [...data.schedule];
+                          const [moved] = newSchedule.splice(draggedIdx, 1);
+                          newSchedule.splice(idx, 0, moved);
+                          // Recalculate start/end times
+                          let cumTime = 0;
+                          const resequenced = newSchedule.map(item => {
+                            const start = cumTime;
+                            const end = cumTime + item.processingTime;
+                            cumTime = end;
+                            return { ...item, startTime: start, endTime: end };
+                          });
+                          setData(prev => ({ ...prev, schedule: resequenced, makespan: cumTime }));
+                          setDraggedIdx(null);
+                          setDragOverIdx(null);
+                          // Call backend
+                          setResequencing(true);
+                          try {
+                            const res = await fetch('/api/scheduling/resequence', {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ plant, orderIds: resequenced.map(r => r.id), orders: resequenced }),
+                            });
+                            if (res.ok) {
+                              const updated = await res.json();
+                              setData(prev => ({ ...prev, schedule: updated.schedule, makespan: updated.makespan, lateOrders: updated.lateOrders, totalOrders: updated.totalOrders }));
+                            }
+                          } catch {
+                            // keep local resequenced data as fallback
+                          }
+                          setResequencing(false);
+                        }}
+                        style={{
+                          borderBottom: `1px solid ${T.border}`,
+                          background: o.late ? T.riskBg : draggedIdx === idx ? `${T.accent}10` : 'transparent',
+                          cursor: 'grab',
+                          position: 'relative',
+                          borderTop: dragOverIdx === idx && draggedIdx !== null && draggedIdx !== idx ? `2px solid ${T.blue}` : 'none',
+                          opacity: draggedIdx === idx ? 0.5 : 1,
+                          transition: 'opacity 0.1s',
+                        }}
+                      >
+                        <td style={{ padding: '6px 10px', color: T.inkGhost, fontSize: 10 }}>{idx + 1}</td>
                         <td style={{ padding: '6px 10px', fontWeight: 500 }}>{o.id}</td>
                         <td style={{ padding: '6px 10px' }}>
                           <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: SKU_COLORS[o.skuCode] || T.inkGhost, marginRight: 6 }} />
@@ -142,8 +220,8 @@ export default function SchedulingPage() {
                         </td>
                         <td style={{ padding: '6px 10px', textAlign: 'right' }}>{o.qty}</td>
                         <td style={{ padding: '6px 10px', textAlign: 'right' }}>{o.processingTime}h</td>
-                        <td style={{ padding: '6px 10px', textAlign: 'right' }}>{o.startTime}h</td>
-                        <td style={{ padding: '6px 10px', textAlign: 'right' }}>{o.endTime}h</td>
+                        <td style={{ padding: '6px 10px', textAlign: 'right' }}>{Math.round(o.startTime * 10) / 10}h</td>
+                        <td style={{ padding: '6px 10px', textAlign: 'right' }}>{Math.round(o.endTime * 10) / 10}h</td>
                         <td style={{ padding: '6px 10px', textAlign: 'right', color: T.inkMid }}>{o.dueDate}</td>
                         <td style={{ padding: '6px 10px' }}>
                           {o.late ? (

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { T } from '../styles/tokens';
+import TrustScore from '../components/TrustScore';
 
 const MODULES = ['all', 'demand', 'drp', 'production', 'scheduling', 'mrp'];
 
@@ -215,6 +216,9 @@ export default function DecisionsPage() {
             </div>
           </div>
         )}
+
+        {/* TrustScore Widget */}
+        <TrustScore />
 
         {/* Financial Impact Summary */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
