@@ -572,7 +572,7 @@ export default function MrpPage() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                     <thead>
                       <tr style={{ borderBottom: `2px solid ${T.border}` }}>
-                        {['Severity', 'Item', 'Type', 'Period', 'Qty', 'Message', 'AI Suggestion', 'Actions'].map(h => (
+                        {['Severity', 'Item', 'Type', 'Period', 'Qty', '$ Impact', 'Message', 'AI Suggestion', 'Actions'].map(h => (
                           <th key={h} scope="col" style={{ textAlign: 'left', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
                         ))}
                       </tr>
@@ -594,6 +594,9 @@ export default function MrpPage() {
                           <td style={{ padding: '8px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{e.type}</td>
                           <td style={{ padding: '8px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{e.period || e.fromPeriod || '\u2014'}</td>
                           <td style={{ padding: '8px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{e.qty || '\u2014'}</td>
+                          <td style={{ padding: '8px 10px', fontFamily: 'JetBrains Mono', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', color: e.financialImpact?.type === 'cost' || e.financialImpact?.type === 'risk' ? T.risk : e.financialImpact?.type === 'cost-avoidance' || e.financialImpact?.type === 'savings' ? T.safe : T.inkMid }}>
+                            {e.financialImpact ? `$${e.financialImpact.amount.toLocaleString()}` : '—'}
+                          </td>
                           <td style={{ padding: '8px 10px', fontSize: 12, color: T.inkMid }}>{e.message}</td>
                           <td style={{ padding: '8px 10px' }}>
                             {suggestions[i] && suggestions[i].confidence >= 30 && (
