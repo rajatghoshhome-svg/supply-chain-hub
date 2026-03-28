@@ -1,10 +1,29 @@
 import { useNavigate } from 'react-router-dom';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Component } from 'react';
 import { T } from '../styles/tokens';
 import CascadeViz from '../components/CascadeViz';
 import NetworkMap from '../components/NetworkMap';
 import WhatIfTheater from '../components/WhatIfTheater';
 import MorningBriefing from '../components/MorningBriefing';
+
+// Error boundary to prevent individual component crashes from killing the whole page
+class SafeRender extends Component {
+  constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ background: T.riskBg, border: `1px solid ${T.riskBorder}`, borderRadius: 8, padding: '16px 20px', margin: '8px 0' }}>
+          <div style={{ fontFamily: 'Sora', fontSize: 13, fontWeight: 600, color: T.risk, marginBottom: 4 }}>
+            {this.props.name || 'Component'} failed to load
+          </div>
+          <div style={{ fontSize: 12, color: T.inkMid }}>{this.state.error?.message || 'Unknown error'}</div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const CASCADE_STEPS = [
   { module: 'demand', label: 'Demand Plan', path: '/demand', desc: 'Statistical forecasting with 5 methods, best-fit selection, accuracy metrics' },
@@ -137,7 +156,7 @@ export default function Landing() {
 
       {/* Morning Briefing */}
       <div className="landing-section" style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 40px 0' }}>
-        <MorningBriefing />
+        <SafeRender name="Morning Briefing"><MorningBriefing /></SafeRender>
       </div>
 
       {/* System Health */}
@@ -284,17 +303,17 @@ export default function Landing() {
             </span>
           )}
         </div>
-        <CascadeViz />
+        <SafeRender name="Cascade Visualization"><CascadeViz /></SafeRender>
       </div>
 
       {/* Network Architecture — Interactive Map */}
       <div className="landing-section" style={{ maxWidth: 1200, margin: '0 auto', padding: '0 40px 32px' }}>
-        <NetworkMap />
+        <SafeRender name="Network Map"><NetworkMap /></SafeRender>
       </div>
 
       {/* What-If Theater */}
       <div className="landing-section" style={{ maxWidth: 1200, margin: '0 auto', padding: '0 40px 32px' }}>
-        <WhatIfTheater />
+        <SafeRender name="What-If Theater"><WhatIfTheater /></SafeRender>
       </div>
 
       {/* Architecture */}
