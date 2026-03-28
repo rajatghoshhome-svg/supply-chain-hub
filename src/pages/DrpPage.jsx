@@ -116,6 +116,40 @@ export default function DrpPage() {
   const [approvedShipments, setApprovedShipments] = useState({});
   const [editingShipment, setEditingShipment] = useState(null);
   const [shipmentEdits, setShipmentEdits] = useState({});
+  const [resolvedExceptions, setResolvedExceptions] = useState({});
+  const [actionLoading, setActionLoading] = useState(null);
+  const [suggestions, setSuggestions] = useState({});
+
+  const handleExceptionAction = async (exception, index, action) => {
+    setActionLoading(index);
+    try {
+      const statusMap = { accept: 'accepted', defer: 'deferred', dismiss: 'dismissed' };
+      const actionLabel = action === 'accept' ? `Accept: ${exception.type}` : action === 'defer' ? `Defer: ${exception.type}` : `Dismiss: ${exception.type}`;
+      await fetch('/api/decisions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          module: 'drp',
+          action: actionLabel,
+          entityType: 'exception',
+          entity: `${exception.skuCode || 'Unknown'} @ ${exception.locationCode || 'Unknown'} — ${exception.message?.slice(0, 60)}`,
+          rationale: suggestions[index]?.suggestedAction
+            ? `AI suggested: ${suggestions[index].suggestedAction} (${suggestions[index].confidence}% confidence)`
+            : 'Planner decision',
+          decidedBy: action === 'accept' && suggestions[index]?.confidence >= 60 ? 'AI recommended' : 'Planner',
+          financialImpact: exception.qty ? {
+            amount: exception.type === 'expedite' ? exception.qty * 15 : exception.qty * 85,
+            type: action === 'accept' ? 'cost-avoidance' : 'cost',
+          } : null,
+          status: statusMap[action],
+        }),
+      });
+      setResolvedExceptions(prev => ({ ...prev, [index]: { status: statusMap[action], action } }));
+    } catch (err) {
+      console.error('Failed to log decision:', err);
+    }
+    setActionLoading(null);
+  };
 
   useEffect(() => {
     fetch('/api/drp/demo')
@@ -144,6 +178,35 @@ export default function DrpPage() {
       });
   }, []);
 
+  // Fetch AI suggestions when switching to exceptions tab
+  useEffect(() => {
+    if (tab !== 'exceptions' || !data?.results) return;
+    const allExc = data.results.flatMap(r => r.exceptions || []);
+    if (allExc.length === 0) return;
+    const payload = allExc.map(e => ({
+      module: 'drp',
+      severity: e.severity,
+      message: e.message,
+      type: e.type,
+    }));
+    fetch('/api/decisions/suggest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ exceptions: payload }),
+    })
+      .then(r => r.json())
+      .then(results => {
+        const map = {};
+        results.forEach((r, i) => {
+          if (r.suggestion && r.suggestion.confidence > 0) {
+            map[i] = r.suggestion;
+          }
+        });
+        setSuggestions(map);
+      })
+      .catch(() => {});
+  }, [tab, data]);
+
   // Load approved shipments from API
   useEffect(() => {
     fetch('/api/drp/approved-shipments')
@@ -159,6 +222,21 @@ export default function DrpPage() {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ skuCode, locationCode: dc, period }),
+    }).catch(() => {});
+    // Also log to decision service
+    fetch('/api/decisions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        module: 'drp',
+        action: `Approve shipment: ${skuCode} → ${dc}`,
+        entityType: 'transfer',
+        entity: `${skuCode} @ ${dc} — Period ${period}`,
+        rationale: 'Planner approved planned shipment for execution',
+        decidedBy: 'Planner',
+        financialImpact: null,
+        status: 'accepted',
+      }),
     }).catch(() => {});
   };
 
@@ -531,7 +609,7 @@ export default function DrpPage() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                     <thead>
                       <tr style={{ borderBottom: `2px solid ${T.border}` }}>
-                        {['Severity', 'Product', 'Location', 'Type', 'Period', 'Qty', 'Message'].map(h => (
+                        {['Severity', 'Product', 'Location', 'Type', 'Period', 'Qty', 'Message', 'AI Suggestion', 'Actions'].map(h => (
                           <th key={h} scope="col" style={{ textAlign: 'left', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
                         ))}
                       </tr>
@@ -555,6 +633,48 @@ export default function DrpPage() {
                           <td style={{ padding: '8px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{e.period || '—'}</td>
                           <td style={{ padding: '8px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{e.qty || '—'}</td>
                           <td style={{ padding: '8px 10px', fontSize: 12, color: T.inkMid }}>{e.message}</td>
+                          <td style={{ padding: '8px 10px' }}>
+                            {suggestions[i] && suggestions[i].confidence >= 30 && (
+                              <span style={{
+                                display: 'inline-block', padding: '3px 8px', borderRadius: 4, fontSize: 10, fontWeight: 500, fontFamily: 'JetBrains Mono',
+                                background: suggestions[i].confidence >= 60 ? '#e6f4ea' : '#fef3e0',
+                                color: suggestions[i].confidence >= 60 ? '#1a7f37' : '#9a6700',
+                                border: `1px solid ${suggestions[i].confidence >= 60 ? '#a7d9b2' : '#f0c87a'}`,
+                                whiteSpace: 'nowrap',
+                              }}>
+                                AI: {suggestions[i].suggestedAction} ({suggestions[i].confidence}%)
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
+                            {resolvedExceptions[i] ? (
+                              <span style={{
+                                display: 'inline-block', padding: '3px 10px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                                background: resolvedExceptions[i].status === 'accepted' ? '#e6f4ea' : resolvedExceptions[i].status === 'deferred' ? '#fef3e0' : T.bgDark,
+                                color: resolvedExceptions[i].status === 'accepted' ? '#1a7f37' : resolvedExceptions[i].status === 'deferred' ? '#9a6700' : T.inkMid,
+                              }}>
+                                {resolvedExceptions[i].status === 'accepted' ? '✓ Accepted' : resolvedExceptions[i].status === 'deferred' ? '⏳ Deferred' : '✕ Dismissed'}
+                              </span>
+                            ) : (
+                              <div style={{ display: 'flex', gap: 4 }}>
+                                {[
+                                  { key: 'accept', label: 'Accept', bg: '#e6f4ea', color: '#1a7f37', border: '#a7d9b2' },
+                                  { key: 'defer', label: 'Defer', bg: '#fef3e0', color: '#9a6700', border: '#f0c87a' },
+                                  { key: 'dismiss', label: 'Dismiss', bg: T.bgDark, color: T.inkMid, border: T.border },
+                                ].map(btn => (
+                                  <button key={btn.key} onClick={() => handleExceptionAction(e, i, btn.key)}
+                                    disabled={actionLoading === i}
+                                    style={{
+                                      padding: '3px 8px', borderRadius: 4, fontSize: 10, fontWeight: 500, cursor: 'pointer',
+                                      background: btn.bg, color: btn.color, border: `1px solid ${btn.border}`,
+                                      opacity: actionLoading === i ? 0.5 : 1,
+                                    }}>
+                                    {actionLoading === i ? '...' : btn.label}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

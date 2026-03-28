@@ -120,6 +120,39 @@ export default function MrpPage() {
   const [newBomLine, setNewBomLine] = useState({ code: '', name: '', qtyPer: 1, scrapPct: 0 });
   const [bomSaving, setBomSaving] = useState(false);
   const [requirementsView, setRequirementsView] = useState('summary'); // 'summary' or 'explosion'
+  const [resolvedExceptions, setResolvedExceptions] = useState({}); // { index: { status, decidedBy } }
+  const [actionLoading, setActionLoading] = useState(null); // index being acted on
+
+  const handleExceptionAction = async (exception, index, action) => {
+    setActionLoading(index);
+    try {
+      const statusMap = { accept: 'accepted', defer: 'deferred', dismiss: 'dismissed' };
+      const actionLabel = action === 'accept' ? `Accept: ${exception.type}` : action === 'defer' ? `Defer: ${exception.type}` : `Dismiss: ${exception.type}`;
+      await fetch('/api/decisions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          module: 'mrp',
+          action: actionLabel,
+          entityType: 'exception',
+          entity: `${exception.skuCode || 'Unknown'} — ${exception.message?.slice(0, 60)}`,
+          rationale: suggestions[index]?.suggestedAction
+            ? `AI suggested: ${suggestions[index].suggestedAction} (${suggestions[index].confidence}% confidence)`
+            : 'Planner decision',
+          decidedBy: action === 'accept' && suggestions[index]?.confidence >= 60 ? 'AI recommended' : 'Planner',
+          financialImpact: exception.qty ? {
+            amount: exception.type === 'expedite' ? exception.qty * 15 : exception.type === 'cancel' ? exception.qty * 7.5 : exception.qty * 10,
+            type: action === 'accept' ? 'cost-avoidance' : 'cost',
+          } : null,
+          status: statusMap[action],
+        }),
+      });
+      setResolvedExceptions(prev => ({ ...prev, [index]: { status: statusMap[action], action } }));
+    } catch (err) {
+      console.error('Failed to log decision:', err);
+    }
+    setActionLoading(null);
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -539,7 +572,7 @@ export default function MrpPage() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                     <thead>
                       <tr style={{ borderBottom: `2px solid ${T.border}` }}>
-                        {['Severity', 'Item', 'Type', 'Period', 'Qty', 'Message', 'AI Suggestion'].map(h => (
+                        {['Severity', 'Item', 'Type', 'Period', 'Qty', 'Message', 'AI Suggestion', 'Actions'].map(h => (
                           <th key={h} scope="col" style={{ textAlign: 'left', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
                         ))}
                       </tr>
@@ -578,6 +611,35 @@ export default function MrpPage() {
                               }}>
                                 AI: {suggestions[i].suggestedAction} ({suggestions[i].confidence}%)
                               </span>
+                            )}
+                          </td>
+                          <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
+                            {resolvedExceptions[i] ? (
+                              <span style={{
+                                display: 'inline-block', padding: '3px 10px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                                background: resolvedExceptions[i].status === 'accepted' ? '#e6f4ea' : resolvedExceptions[i].status === 'deferred' ? '#fef3e0' : T.bgDark,
+                                color: resolvedExceptions[i].status === 'accepted' ? '#1a7f37' : resolvedExceptions[i].status === 'deferred' ? '#9a6700' : T.inkMid,
+                              }}>
+                                {resolvedExceptions[i].status === 'accepted' ? '✓ Accepted' : resolvedExceptions[i].status === 'deferred' ? '⏳ Deferred' : '✕ Dismissed'}
+                              </span>
+                            ) : (
+                              <div style={{ display: 'flex', gap: 4 }}>
+                                {[
+                                  { key: 'accept', label: 'Accept', bg: '#e6f4ea', color: '#1a7f37', border: '#a7d9b2' },
+                                  { key: 'defer', label: 'Defer', bg: '#fef3e0', color: '#9a6700', border: '#f0c87a' },
+                                  { key: 'dismiss', label: 'Dismiss', bg: T.bgDark, color: T.inkMid, border: T.border },
+                                ].map(btn => (
+                                  <button key={btn.key} onClick={() => handleExceptionAction(e, i, btn.key)}
+                                    disabled={actionLoading === i}
+                                    style={{
+                                      padding: '3px 8px', borderRadius: 4, fontSize: 10, fontWeight: 500, cursor: 'pointer',
+                                      background: btn.bg, color: btn.color, border: `1px solid ${btn.border}`,
+                                      opacity: actionLoading === i ? 0.5 : 1,
+                                    }}>
+                                    {actionLoading === i ? '...' : btn.label}
+                                  </button>
+                                ))}
+                              </div>
                             )}
                           </td>
                         </tr>

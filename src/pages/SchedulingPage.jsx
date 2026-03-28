@@ -55,6 +55,36 @@ export default function SchedulingPage() {
   const [draggedIdx, setDraggedIdx] = useState(null);
   const [dragOverIdx, setDragOverIdx] = useState(null);
   const [resequencing, setResequencing] = useState(false);
+  const [resolvedOrders, setResolvedOrders] = useState({});
+  const [orderActionLoading, setOrderActionLoading] = useState(null);
+
+  const handleOrderAction = async (order, action) => {
+    setOrderActionLoading(order.id);
+    try {
+      const statusMap = { accept: 'accepted', escalate: 'deferred' };
+      const actionLabel = action === 'accept' ? `Accept delay: ${order.id}` : `Escalate: ${order.id}`;
+      await fetch('/api/decisions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          module: 'scheduling',
+          action: actionLabel,
+          entityType: 'exception',
+          entity: `${order.id} — ${order.skuCode} (${order.qty} units, +${order.lateDays}d late)`,
+          rationale: action === 'accept'
+            ? `Planner accepted ${order.lateDays}-day delay for ${order.skuCode}`
+            : `Planner escalated late order ${order.id} for management review`,
+          decidedBy: 'Planner',
+          financialImpact: { amount: 500 * (order.lateDays || 1), type: action === 'accept' ? 'cost' : 'risk' },
+          status: statusMap[action],
+        }),
+      });
+      setResolvedOrders(prev => ({ ...prev, [order.id]: { status: statusMap[action], action } }));
+    } catch (err) {
+      console.error('Failed to log decision:', err);
+    }
+    setOrderActionLoading(null);
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -128,8 +158,8 @@ export default function SchedulingPage() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, fontFamily: 'JetBrains Mono' }}>
                   <thead>
                     <tr style={{ borderBottom: `2px solid ${T.border}` }}>
-                      {['#', 'Order', 'SKU', 'Quantity', 'Processing Time', 'Rate', 'Start', 'End', 'Due Date', 'Work Center', 'Status'].map(h => (
-                        <th key={h} scope="col" style={{ textAlign: h === '#' || h === 'Order' || h === 'SKU' || h === 'Status' || h === 'Work Center' ? 'left' : 'right', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
+                      {['#', 'Order', 'SKU', 'Quantity', 'Processing Time', 'Rate', 'Start', 'End', 'Due Date', 'Work Center', 'Status', 'Actions'].map(h => (
+                        <th key={h} scope="col" style={{ textAlign: h === '#' || h === 'Order' || h === 'SKU' || h === 'Status' || h === 'Work Center' || h === 'Actions' ? 'left' : 'right', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -174,6 +204,32 @@ export default function SchedulingPage() {
                           <td style={{ padding: '6px 10px', fontSize: 10, color: T.inkMid }}>{o.workCenterName || o.workCenter || '\u2014'}</td>
                           <td style={{ padding: '6px 10px' }}>
                             {o.late ? (<span style={{ color: T.risk, fontWeight: 600 }}>LATE (+{o.lateDays}d)</span>) : (<span style={{ color: T.safe }}>On Time</span>)}
+                          </td>
+                          <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>
+                            {o.late ? (
+                              resolvedOrders[o.id] ? (
+                                <span style={{
+                                  display: 'inline-block', padding: '3px 10px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                                  background: resolvedOrders[o.id].status === 'accepted' ? '#fef3e0' : '#fce4ec',
+                                  color: resolvedOrders[o.id].status === 'accepted' ? '#9a6700' : '#c62828',
+                                }}>
+                                  {resolvedOrders[o.id].action === 'accept' ? '⏳ Delay Accepted' : '🔺 Escalated'}
+                                </span>
+                              ) : (
+                                <div style={{ display: 'flex', gap: 4 }}>
+                                  <button onClick={() => handleOrderAction(o, 'accept')} disabled={orderActionLoading === o.id}
+                                    style={{ padding: '3px 8px', borderRadius: 4, fontSize: 10, fontWeight: 500, cursor: 'pointer', background: '#fef3e0', color: '#9a6700', border: '1px solid #f0c87a', opacity: orderActionLoading === o.id ? 0.5 : 1 }}>
+                                    {orderActionLoading === o.id ? '...' : 'Accept Delay'}
+                                  </button>
+                                  <button onClick={() => handleOrderAction(o, 'escalate')} disabled={orderActionLoading === o.id}
+                                    style={{ padding: '3px 8px', borderRadius: 4, fontSize: 10, fontWeight: 500, cursor: 'pointer', background: '#fce4ec', color: '#c62828', border: '1px solid #ef9a9a', opacity: orderActionLoading === o.id ? 0.5 : 1 }}>
+                                    {orderActionLoading === o.id ? '...' : 'Escalate'}
+                                  </button>
+                                </div>
+                              )
+                            ) : (
+                              <span style={{ color: T.inkGhost, fontSize: 10 }}>—</span>
+                            )}
                           </td>
                         </tr>
                       );
