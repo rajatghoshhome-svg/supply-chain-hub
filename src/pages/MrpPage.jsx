@@ -118,8 +118,8 @@ export default function MrpPage() {
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      fetch(`/api/mrp/demo?plant=${selectedPlant}`).then(r => r.json()),
-      fetch(`/api/mrp/bom?plant=${selectedPlant}`).then(r => r.json()),
+      fetch(`/api/mrp/demo?plant=${selectedPlant}`).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
+      fetch(`/api/mrp/bom?plant=${selectedPlant}`).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
     ])
       .then(([mrp, bom]) => {
         setData(mrp);

@@ -82,7 +82,7 @@ export default function DemandPage() {
   // Load SKU list
   useEffect(() => {
     fetch(`${API}/history`)
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(data => setSkus(data.skus || []))
       .catch(() => setSkus(STATIC_SKUS));
   }, []);
@@ -129,8 +129,8 @@ export default function DemandPage() {
     setError(null);
 
     Promise.all([
-      fetch(`${API}/demo/${selectedSku}`).then(r => r.json()),
-      fetch(`${API}/history/${selectedSku}`).then(r => r.json()),
+      fetch(`${API}/demo/${selectedSku}`).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
+      fetch(`${API}/history/${selectedSku}`).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
     ]).then(([demo, hist]) => {
       setDemoData(demo);
       setHistoryData(hist);

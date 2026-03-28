@@ -47,7 +47,7 @@ export default function SchedulingPage() {
   useEffect(() => {
     setLoading(true);
     fetch(`/api/scheduling/demo?rule=${rule}&plant=${plant}`)
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(d => { setData(d); setLoading(false); })
       .catch(() => { console.warn('Scheduling API unavailable, using static fallback'); setData(STATIC_SCHEDULE); setLoading(false); });
   }, [rule, plant]);

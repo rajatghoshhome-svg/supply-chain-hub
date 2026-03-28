@@ -101,7 +101,7 @@ export default function DrpPage() {
 
   useEffect(() => {
     fetch('/api/drp/demo')
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(d => {
         setData(d);
         if (d.results?.length > 0) {

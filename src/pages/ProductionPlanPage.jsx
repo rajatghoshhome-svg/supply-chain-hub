@@ -104,7 +104,7 @@ export default function ProductionPlanPage() {
 
   useEffect(() => {
     fetch('/api/production-plan/demo')
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(d => {
         setRawData(d);
         if (d.plantResults?.length > 0) {
