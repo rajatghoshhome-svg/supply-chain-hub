@@ -19,6 +19,24 @@ const SKU_COLORS = {
 
 const PLANTS = ['PLANT-NORTH', 'PLANT-SOUTH', 'PLANT-WEST'];
 
+// ─── Static fallback data (used when API is unavailable, e.g. Vercel) ────
+const STATIC_SCHEDULE = {
+  totalOrders: 6, makespan: 28.5, lateOrders: 1,
+  schedule: [
+    { id: 'PO-4401', skuCode: 'MTR-100', qty: 200, processingTime: 4, startTime: 0, endTime: 4, dueDate: 'W14-Fri', late: false },
+    { id: 'PO-4402', skuCode: 'MTR-200', qty: 150, processingTime: 5.5, startTime: 4, endTime: 9.5, dueDate: 'W15-Wed', late: false },
+    { id: 'PO-4403', skuCode: 'MTR-500', qty: 100, processingTime: 6, startTime: 9.5, endTime: 15.5, dueDate: 'W15-Fri', late: false },
+    { id: 'PO-4404', skuCode: 'MTR-300', qty: 180, processingTime: 4.5, startTime: 15.5, endTime: 20, dueDate: 'W16-Mon', late: false },
+    { id: 'PO-4405', skuCode: 'MTR-400', qty: 120, processingTime: 3.5, startTime: 20, endTime: 23.5, dueDate: 'W16-Wed', late: false },
+    { id: 'PO-4406', skuCode: 'MTR-100', qty: 250, processingTime: 5, startTime: 23.5, endTime: 28.5, dueDate: 'W16-Tue', late: true, lateDays: 1 },
+  ],
+  comparison: {
+    SPT: { makespan: 26.0, lateOrders: 2, sequence: ['PO-4405','PO-4401','PO-4404','PO-4402','PO-4406','PO-4403'] },
+    EDD: { makespan: 28.5, lateOrders: 1, sequence: ['PO-4401','PO-4402','PO-4403','PO-4404','PO-4405','PO-4406'] },
+    CR: { makespan: 27.5, lateOrders: 1, sequence: ['PO-4401','PO-4402','PO-4404','PO-4403','PO-4405','PO-4406'] },
+  },
+};
+
 export default function SchedulingPage() {
   const [tab, setTab] = useState('gantt');
   const [data, setData] = useState(null);
@@ -31,7 +49,7 @@ export default function SchedulingPage() {
     fetch(`/api/scheduling/demo?rule=${rule}&plant=${plant}`)
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false); })
-      .catch(() => setLoading(false));
+      .catch(() => { console.warn('Scheduling API unavailable, using static fallback'); setData(STATIC_SCHEDULE); setLoading(false); });
   }, [rule, plant]);
 
   return (

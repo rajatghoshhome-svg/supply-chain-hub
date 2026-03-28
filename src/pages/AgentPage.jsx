@@ -19,7 +19,7 @@ export default function AgentPage() {
     fetch('/api/drp/demo')
       .then(r => r.json())
       .then(d => setStats(d))
-      .catch(() => {});
+      .catch(() => setStats({ skusPlanned: 3, locationsPlanned: 3, totalExceptions: 2, criticalExceptions: 1 }));
   }, []);
 
   return (

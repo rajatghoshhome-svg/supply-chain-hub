@@ -11,6 +11,58 @@ const TABS = [
   { id: 'exceptions', label: 'Exceptions' },
 ];
 
+// ─── Static fallback data (used when API is unavailable, e.g. Vercel) ────
+const STATIC_DRP = {
+  skusPlanned: 3, locationsPlanned: 3, totalExceptions: 2, criticalExceptions: 1,
+  results: [
+    {
+      skuCode: 'MTR-100', skuName: '1HP Standard Motor',
+      exceptions: [{ severity: 'critical', type: 'expedite', message: 'DC-EAST safety stock breach — expedite 80 units from PLANT-NORTH' }],
+      dcResults: [
+        { locationCode: 'DC-EAST', periods: ['W13','W14','W15','W16','W17','W18'],
+          grossRequirements: [60,55,70,65,60,75], scheduledReceipts: [0,0,0,0,0,0],
+          projectedOnHand: [40,-15,-85,-150,-210,-285], netRequirements: [0,55,70,65,60,75],
+          plannedReceipts: [0,55,70,65,60,75], plannedShipments: [0,55,70,65,60,75],
+          safetyStock: 50, leadTime: 2, onHand: 100 },
+        { locationCode: 'DC-WEST', periods: ['W13','W14','W15','W16','W17','W18'],
+          grossRequirements: [45,50,40,55,48,52], scheduledReceipts: [0,0,0,0,0,0],
+          projectedOnHand: [35,-15,-55,-110,-158,-210], netRequirements: [0,50,40,55,48,52],
+          plannedReceipts: [0,50,40,55,48,52], plannedShipments: [0,50,40,55,48,52],
+          safetyStock: 40, leadTime: 3, onHand: 80 },
+        { locationCode: 'DC-CENTRAL', periods: ['W13','W14','W15','W16','W17','W18'],
+          grossRequirements: [50,48,55,52,58,50], scheduledReceipts: [0,0,0,0,0,0],
+          projectedOnHand: [40,-8,-63,-115,-173,-223], netRequirements: [0,48,55,52,58,50],
+          plannedReceipts: [0,48,55,52,58,50], plannedShipments: [0,48,55,52,58,50],
+          safetyStock: 45, leadTime: 2, onHand: 90 },
+      ],
+      plantRequirements: { periods: ['W13','W14','W15','W16','W17','W18'], grossRequirements: [0,153,165,172,166,177] },
+    },
+    {
+      skuCode: 'MTR-200', skuName: '2HP Industrial Motor', exceptions: [],
+      dcResults: [
+        { locationCode: 'DC-EAST', periods: ['W13','W14','W15','W16','W17','W18'],
+          grossRequirements: [30,35,28,40,32,38], scheduledReceipts: [0,0,0,0,0,0],
+          projectedOnHand: [20,-15,-43,-83,-115,-153], netRequirements: [0,35,28,40,32,38],
+          plannedReceipts: [0,35,28,40,32,38], plannedShipments: [0,35,28,40,32,38],
+          safetyStock: 30, leadTime: 2, onHand: 50 },
+      ],
+      plantRequirements: { periods: ['W13','W14','W15','W16','W17','W18'], grossRequirements: [0,35,28,40,32,38] },
+    },
+    {
+      skuCode: 'MTR-500', skuName: '5HP Heavy Duty Motor',
+      exceptions: [{ severity: 'warning', type: 'rebalance', message: 'DC-WEST overstocked relative to DC-CENTRAL — consider rebalance' }],
+      dcResults: [
+        { locationCode: 'DC-EAST', periods: ['W13','W14','W15','W16','W17','W18'],
+          grossRequirements: [15,18,12,20,16,22], scheduledReceipts: [0,0,0,0,0,0],
+          projectedOnHand: [10,-8,-20,-40,-56,-78], netRequirements: [0,18,12,20,16,22],
+          plannedReceipts: [0,18,12,20,16,22], plannedShipments: [0,18,12,20,16,22],
+          safetyStock: 15, leadTime: 3, onHand: 25 },
+      ],
+      plantRequirements: { periods: ['W13','W14','W15','W16','W17','W18'], grossRequirements: [0,18,12,20,16,22] },
+    },
+  ],
+};
+
 export default function DrpPage() {
   const [tab, setTab] = useState('requirements');
   const [data, setData] = useState(null);
@@ -31,7 +83,18 @@ export default function DrpPage() {
         }
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => {
+        console.warn('DRP API unavailable, using static fallback');
+        const d = STATIC_DRP;
+        setData(d);
+        if (d.results?.length > 0) {
+          setSelectedSku(d.results[0].skuCode);
+          if (d.results[0].dcResults?.length > 0) {
+            setSelectedDC(d.results[0].dcResults[0].locationCode);
+          }
+        }
+        setLoading(false);
+      });
   }, []);
 
   const selectedResult = data?.results?.find(r => r.skuCode === selectedSku);

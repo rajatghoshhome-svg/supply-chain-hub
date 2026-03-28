@@ -13,6 +13,35 @@ const TABS = [
 
 const API = '/api/demand';
 
+// ─── Static fallback data (used when API is unavailable, e.g. Vercel) ────
+const STATIC_SKUS = [
+  { skuCode: 'MTR-100', skuName: '1HP Standard Motor' },
+  { skuCode: 'MTR-200', skuName: '2HP Industrial Motor' },
+  { skuCode: 'MTR-500', skuName: '5HP Heavy Duty Motor' },
+];
+
+const STATIC_DEMO = {
+  status: 'ok', skuCode: 'MTR-100', skuName: '1HP Standard Motor',
+  bestMethod: 'holt-winters',
+  history: { periods: ['W01','W02','W03','W04','W05','W06','W07','W08','W09','W10','W11','W12'], demand: [120,135,128,142,138,155,149,160,152,168,162,175] },
+  forecast: { periods: ['W13','W14','W15','W16','W17','W18'], demand: [170,178,174,182,179,186] },
+  fitted: [122,133,130,140,139,153,150,158,154,166,163,173],
+  metrics: { mape: 3.2, mad: 4.8, bias: 1.2, trackingSignal: 0.8 },
+  allMethods: [
+    { method: 'holt-winters', mape: 3.2, mad: 4.8, bias: 1.2, forecast: [170,178,174,182,179,186] },
+    { method: 'exponential-smoothing', mape: 5.1, mad: 7.2, bias: -2.1, forecast: [165,172,169,176,173,180] },
+    { method: 'moving-average-3', mape: 6.8, mad: 9.5, bias: 0.5, forecast: [162,168,165,172,169,176] },
+    { method: 'moving-average-6', mape: 7.2, mad: 10.1, bias: -0.8, forecast: [158,164,161,168,165,172] },
+    { method: 'weighted-moving-avg', mape: 5.8, mad: 8.1, bias: 0.3, forecast: [167,174,171,178,175,182] },
+  ],
+};
+
+const STATIC_HISTORY = {
+  skuCode: 'MTR-100', skuName: '1HP Standard Motor',
+  periods: ['W01','W02','W03','W04','W05','W06','W07','W08','W09','W10','W11','W12'],
+  demand: [120,135,128,142,138,155,149,160,152,168,162,175],
+};
+
 const CASCADE_STEPS = [
   { id: 'demand', label: 'Demand', event: 'cascade:demand_updated' },
   { id: 'drp', label: 'DRP', event: 'cascade:drp_rebalanced' },
@@ -42,7 +71,7 @@ export default function DemandPage() {
     fetch(`${API}/history`)
       .then(r => r.json())
       .then(data => setSkus(data.skus || []))
-      .catch(() => {});
+      .catch(() => setSkus(STATIC_SKUS));
   }, []);
 
   // Clean up SSE on unmount
@@ -98,8 +127,12 @@ export default function DemandPage() {
       if (demo.cascade?.triggered) {
         connectCascadeSSE(demo.cascade.planRunId);
       }
-    }).catch(err => {
-      setError(err.message);
+    }).catch(() => {
+      // Fallback to static data (e.g. on Vercel where no Express server runs)
+      console.warn('Demand API unavailable, using static fallback data');
+      setDemoData(STATIC_DEMO);
+      setHistoryData(STATIC_HISTORY);
+      setError(null);
       setLoading(false);
     });
   }, [selectedSku]);

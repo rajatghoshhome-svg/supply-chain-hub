@@ -10,6 +10,67 @@ const TABS = [
   { id: 'strategy', label: 'Strategy Comparison' },
 ];
 
+// ─── Static fallback data (used when API is unavailable, e.g. Vercel) ────
+const STATIC_PROD_PLAN = {
+  plantsPlanned: 1, totalProductsPlanned: 3, strategy: 'chase',
+  plantResults: [
+    {
+      plantCode: 'PLANT-NORTH', productsPlanned: 3,
+      productPlans: [
+        {
+          skuCode: 'MTR-100', skuName: '1HP Standard Motor',
+          plan: {
+            periods: ['W13','W14','W15','W16','W17','W18'],
+            demand: [155,160,165,172,166,177],
+            strategies: {
+              chase: { production: [155,160,165,172,166,177], inventory: [0,0,0,0,0,0], workforce: [18,19,19,20,19,21], cost: 142500 },
+              level: { production: [166,166,166,166,166,166], inventory: [11,17,18,12,12,1], workforce: [19,19,19,19,19,19], cost: 138200 },
+              hybrid: { production: [160,160,165,172,166,172], inventory: [5,5,5,5,5,0], workforce: [19,19,19,20,19,20], cost: 140100 },
+            },
+            capacity: {
+              workCenters: [
+                { name: 'Assembly Line A', available: 200, used: 155, utilization: 0.775 },
+                { name: 'Winding Station', available: 180, used: 165, utilization: 0.917 },
+                { name: 'Test Bay', available: 220, used: 155, utilization: 0.705 },
+              ],
+            },
+          },
+        },
+        {
+          skuCode: 'MTR-200', skuName: '2HP Industrial Motor',
+          plan: {
+            periods: ['W13','W14','W15','W16','W17','W18'],
+            demand: [35,38,28,40,32,38],
+            strategies: {
+              chase: { production: [35,38,28,40,32,38], inventory: [0,0,0,0,0,0], workforce: [4,5,3,5,4,5], cost: 48200 },
+              level: { production: [35,35,35,35,35,35], inventory: [0,-3,4,-1,2,-1], workforce: [4,4,4,4,4,4], cost: 46800 },
+              hybrid: { production: [35,38,30,40,32,36], inventory: [0,0,2,2,2,0], workforce: [4,5,4,5,4,4], cost: 47500 },
+            },
+            capacity: { workCenters: [
+              { name: 'Assembly Line B', available: 80, used: 40, utilization: 0.500 },
+            ]},
+          },
+        },
+        {
+          skuCode: 'MTR-500', skuName: '5HP Heavy Duty Motor',
+          plan: {
+            periods: ['W13','W14','W15','W16','W17','W18'],
+            demand: [18,20,12,20,16,22],
+            strategies: {
+              chase: { production: [18,20,12,20,16,22], inventory: [0,0,0,0,0,0], workforce: [3,3,2,3,2,3], cost: 32400 },
+              level: { production: [18,18,18,18,18,18], inventory: [0,-2,4,2,4,0], workforce: [3,3,3,3,3,3], cost: 31200 },
+              hybrid: { production: [18,20,14,20,16,20], inventory: [0,0,2,2,2,0], workforce: [3,3,2,3,2,3], cost: 31800 },
+            },
+            capacity: { workCenters: [
+              { name: 'Heavy Assembly', available: 30, used: 22, utilization: 0.733 },
+            ]},
+          },
+        },
+      ],
+    },
+  ],
+};
+
 export default function ProductionPlanPage() {
   const [tab, setTab] = useState('aggregate');
   const [rawData, setRawData] = useState(null);
@@ -31,7 +92,18 @@ export default function ProductionPlanPage() {
         }
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => {
+        console.warn('Production Plan API unavailable, using static fallback');
+        const d = STATIC_PROD_PLAN;
+        setRawData(d);
+        if (d.plantResults?.length > 0) {
+          setSelectedPlant(d.plantResults[0].plantCode);
+          if (d.plantResults[0].productPlans?.length > 0) {
+            setSelectedSku(d.plantResults[0].productPlans[0].skuCode);
+          }
+        }
+        setLoading(false);
+      });
   }, []);
 
   const currentPlant = rawData?.plantResults?.find(p => p.plantCode === selectedPlant);

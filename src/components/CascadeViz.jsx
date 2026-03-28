@@ -86,8 +86,16 @@ export default function CascadeViz() {
         sse.close();
       }
     } catch (err) {
-      setError(err.message);
+      // On Vercel (no backend), simulate the cascade visually
+      for (let i = 0; i < STEPS.length; i++) {
+        await new Promise(r => setTimeout(r, 400));
+        setCurrentStep(i);
+        setCompletedSteps(prev => [...prev, STEPS[i].id]);
+      }
+      await new Promise(r => setTimeout(r, 300));
+      setCurrentStep(STEPS.length);
       setRunning(false);
+      setResult({ totalSteps: STEPS.length, simulated: true });
       sse.close();
     }
   };

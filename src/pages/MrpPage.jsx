@@ -18,6 +18,81 @@ const LEVEL_COLORS = {
   2: { bg: T.inkLight, text: T.white, label: 'RAW' },
 };
 
+// ─── Static fallback data (used when API is unavailable, e.g. Vercel) ────
+const STATIC_MRP = {
+  planRunId: 'static', plant: 'PLANT-NORTH', skusPlanned: 3, totalExceptions: 3,
+  results: [
+    {
+      skuCode: 'MTR-100', skuName: '1HP Standard Motor',
+      periods: ['W13','W14','W15','W16','W17','W18'],
+      grossRequirements: [0,153,165,172,166,177],
+      scheduledReceipts: [200,0,0,0,0,0],
+      projectedOnHand: [320,167,2,-170,-336,-513],
+      netRequirements: [0,0,0,172,166,177],
+      plannedReceipts: [0,0,0,172,166,177],
+      plannedOrderRelease: [0,172,166,177,0,0],
+      onHand: 120, safetyStock: 50, lotSize: 'L4L', leadTime: 2,
+      exceptions: [
+        { severity: 'critical', type: 'expedite', message: 'Expedite 172 units of MTR-100 — needed W16 but lead time requires release W14' },
+        { severity: 'warning', type: 'reschedule-in', message: 'Reschedule SR of 200 from W13 to W15 to reduce carrying cost' },
+      ],
+    },
+    {
+      skuCode: 'MTR-200', skuName: '2HP Industrial Motor',
+      periods: ['W13','W14','W15','W16','W17','W18'],
+      grossRequirements: [0,35,28,40,32,38],
+      scheduledReceipts: [0,0,0,0,0,0],
+      projectedOnHand: [60,25,-3,-43,-75,-113],
+      netRequirements: [0,0,28,40,32,38],
+      plannedReceipts: [0,0,28,40,32,38],
+      plannedOrderRelease: [28,40,32,38,0,0],
+      onHand: 60, safetyStock: 20, lotSize: 'L4L', leadTime: 2,
+      exceptions: [
+        { severity: 'warning', type: 'expedite', message: 'Release order for 28 units of MTR-200 in W13 for W15 receipt' },
+      ],
+    },
+    {
+      skuCode: 'MTR-500', skuName: '5HP Heavy Duty Motor',
+      periods: ['W13','W14','W15','W16','W17','W18'],
+      grossRequirements: [0,18,12,20,16,22],
+      scheduledReceipts: [0,0,0,0,0,0],
+      projectedOnHand: [30,12,0,-20,-36,-58],
+      netRequirements: [0,0,10,20,16,22],
+      plannedReceipts: [0,0,10,20,16,22],
+      plannedOrderRelease: [10,20,16,22,0,0],
+      onHand: 30, safetyStock: 10, lotSize: 'L4L', leadTime: 3,
+      exceptions: [],
+    },
+  ],
+};
+
+const STATIC_BOM = {
+  plant: 'PLANT-NORTH',
+  tree: [
+    { code: 'MTR-100', name: '1HP Standard Motor', level: 0, children: [
+      { code: 'STATOR-100', name: 'Stator Assembly', level: 1, qtyPer: 1, children: [
+        { code: 'COPPER-WIRE', name: 'Copper Wire (2kg)', level: 2, qtyPer: 2, children: [] },
+        { code: 'LAMINATION', name: 'Steel Lamination', level: 2, qtyPer: 12, children: [] },
+      ]},
+      { code: 'ROTOR-100', name: 'Rotor Assembly', level: 1, qtyPer: 1, children: [
+        { code: 'SHAFT-SM', name: 'Steel Shaft (Small)', level: 2, qtyPer: 1, children: [] },
+        { code: 'BEARING-6205', name: 'Bearing 6205', level: 2, qtyPer: 2, children: [] },
+      ]},
+      { code: 'HOUSING-SM', name: 'Cast Housing (Small)', level: 1, qtyPer: 1, children: [] },
+    ]},
+    { code: 'MTR-200', name: '2HP Industrial Motor', level: 0, children: [
+      { code: 'STATOR-200', name: 'Stator Assembly (2HP)', level: 1, qtyPer: 1, children: [] },
+      { code: 'ROTOR-200', name: 'Rotor Assembly (2HP)', level: 1, qtyPer: 1, children: [] },
+      { code: 'HOUSING-MD', name: 'Cast Housing (Medium)', level: 1, qtyPer: 1, children: [] },
+    ]},
+    { code: 'MTR-500', name: '5HP Heavy Duty Motor', level: 0, children: [
+      { code: 'STATOR-500', name: 'Stator Assembly (5HP)', level: 1, qtyPer: 1, children: [] },
+      { code: 'ROTOR-500', name: 'Rotor Assembly (5HP)', level: 1, qtyPer: 1, children: [] },
+      { code: 'HOUSING-LG', name: 'Cast Housing (Large)', level: 1, qtyPer: 1, children: [] },
+    ]},
+  ],
+};
+
 export default function MrpPage() {
   const [tab, setTab] = useState('records');
   const [data, setData] = useState(null);
@@ -44,7 +119,16 @@ export default function MrpPage() {
         setExpandedBom(expanded);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => {
+        console.warn('MRP API unavailable, using static fallback');
+        setData(STATIC_MRP);
+        setBomData(STATIC_BOM);
+        if (STATIC_MRP.results?.length > 0) setSelectedSku(STATIC_MRP.results[0].skuCode);
+        const expanded = new Set();
+        STATIC_BOM.tree?.forEach(fg => expanded.add(fg.code));
+        setExpandedBom(expanded);
+        setLoading(false);
+      });
   }, [selectedPlant]);
 
   // Fetch AI suggestions when switching to exceptions tab
