@@ -25,3 +25,4 @@ dist-ssr
 .env.local
 server/.env
 server/node_modules
+.gstack/

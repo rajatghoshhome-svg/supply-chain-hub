@@ -26,14 +26,159 @@ html {
   outline: none;
 }
 
-/* Mobile nav scroll */
+/* ─── Responsive: Tablet (max-width: 1024px) ─── */
+@media (max-width: 1024px) {
+  .nav-bar {
+    padding-left: 24px !important;
+    padding-right: 24px !important;
+  }
+  .landing-kpi-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+  .landing-section {
+    padding-left: 24px !important;
+    padding-right: 24px !important;
+  }
+  .module-content {
+    padding-left: 24px !important;
+    padding-right: 24px !important;
+  }
+  .module-tab-bar {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+  .page-header {
+    padding-left: 24px !important;
+    padding-right: 24px !important;
+  }
+  .strategy-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .mrp-exceptions-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .module-agent-panel {
+    width: 300px !important;
+  }
+  .module-main-content {
+    max-width: calc(100% - 300px) !important;
+  }
+  .decisions-header {
+    padding-left: 24px !important;
+    padding-right: 24px !important;
+  }
+  .decisions-body {
+    padding-left: 24px !important;
+    padding-right: 24px !important;
+  }
+}
+
+/* ─── Responsive: Mobile (max-width: 768px) ─── */
 @media (max-width: 768px) {
-  nav > div:nth-child(2) {
+  .nav-items {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
   }
-  nav > div:nth-child(2)::-webkit-scrollbar {
+  .nav-items::-webkit-scrollbar {
     display: none;
+  }
+  .landing-kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .briefing-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .financial-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .forecast-methods {
+    flex-direction: column !important;
+  }
+  .accuracy-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .strategy-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .module-agent-panel {
+    display: none !important;
+  }
+  .module-main-content {
+    max-width: 100% !important;
+  }
+  .module-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .module-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .landing-footer {
+    flex-direction: column !important;
+    gap: 8px !important;
+    text-align: center !important;
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+  .decisions-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .whatif-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* ─── Responsive: Small mobile (max-width: 640px) ─── */
+@media (max-width: 640px) {
+  .nav-bar {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+  .nav-cta {
+    display: none !important;
+  }
+  .nav-items button {
+    font-size: 12px !important;
+    padding: 8px 10px !important;
+    white-space: nowrap;
+  }
+  .landing-kpi-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .landing-section {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+  .module-content {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+  .page-header {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+  .briefing-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .financial-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .production-families-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .decisions-header {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+  .decisions-body {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
   }
 }

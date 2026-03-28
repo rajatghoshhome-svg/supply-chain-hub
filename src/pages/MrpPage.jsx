@@ -99,7 +99,7 @@ export default function MrpPage() {
     <ModuleLayout moduleContext="mrp" tabs={TABS} activeTab={tab} onTabChange={setTab}>
       <PageHeader title="Material Requirements Planning" subtitle="MRP" />
 
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
+      <div className="module-content" style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
 
         {/* Plant selector */}
         <div style={{ display: 'flex', gap: 6, marginBottom: 16, alignItems: 'center' }}>
@@ -245,7 +245,7 @@ export default function MrpPage() {
                     <thead>
                       <tr style={{ borderBottom: `2px solid ${T.border}` }}>
                         {['Period', 'Gross Req', 'Sched Rcpt', 'Proj OH', 'Net Req', 'Pln Rcpt', 'Pln Release'].map(h => (
-                          <th key={h} style={{ textAlign: h === 'Period' ? 'left' : 'right', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
+                          <th key={h} scope="col" style={{ textAlign: h === 'Period' ? 'left' : 'right', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -274,7 +274,7 @@ export default function MrpPage() {
         {/* ─── Exceptions Tab ──────────────────────────────────── */}
         {tab === 'exceptions' && (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
+            <div className="mrp-exceptions-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
               {[
                 { label: 'Expedite', count: expCounts.expedite, color: T.risk, desc: 'Need sooner than planned' },
                 { label: 'Reschedule In', count: expCounts['reschedule-in'], color: T.warn, desc: 'Move receipt earlier' },
@@ -296,7 +296,7 @@ export default function MrpPage() {
                     <thead>
                       <tr style={{ borderBottom: `2px solid ${T.border}` }}>
                         {['Severity', 'SKU', 'Type', 'Period', 'Qty', 'Message', 'AI Suggestion'].map(h => (
-                          <th key={h} style={{ textAlign: 'left', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
+                          <th key={h} scope="col" style={{ textAlign: 'left', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
                         ))}
                       </tr>
                     </thead>

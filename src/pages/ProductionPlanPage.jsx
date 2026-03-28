@@ -45,7 +45,7 @@ export default function ProductionPlanPage() {
     <ModuleLayout moduleContext="production_plan" tabs={TABS} activeTab={tab} onTabChange={setTab}>
       <PageHeader title="Production Planning" subtitle="Aggregate & Capacity" />
 
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
+      <div className="module-content" style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
 
         {/* Plant selector */}
         {rawData?.plantResults && (
@@ -103,7 +103,7 @@ export default function ProductionPlanPage() {
             ) : plan ? (
               <>
                 {/* Strategy cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
+                <div className="strategy-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
                   {['chase', 'level', 'hybrid'].map(s => {
                     const st = plan.strategies[s];
                     const isRecommended = plan.recommended === s;
@@ -156,12 +156,12 @@ export default function ProductionPlanPage() {
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, fontFamily: 'JetBrains Mono' }}>
                         <thead>
                           <tr style={{ borderBottom: `2px solid ${T.border}` }}>
-                            <th style={thStyle('left')}>Period</th>
-                            <th style={thStyle('right')}>Demand</th>
-                            <th style={thStyle('right')}>Production</th>
-                            {strategy.overtime && <th style={thStyle('right')}>Overtime</th>}
-                            {strategy.subcontract && <th style={thStyle('right')}>Subcontract</th>}
-                            <th style={thStyle('right')}>End Inv</th>
+                            <th scope="col" style={thStyle('left')}>Period</th>
+                            <th scope="col" style={thStyle('right')}>Demand</th>
+                            <th scope="col" style={thStyle('right')}>Production</th>
+                            {strategy.overtime && <th scope="col" style={thStyle('right')}>Overtime</th>}
+                            {strategy.subcontract && <th scope="col" style={thStyle('right')}>Subcontract</th>}
+                            <th scope="col" style={thStyle('right')}>End Inv</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -290,7 +290,7 @@ function ProdChart({ periods, demand, production, inventory }) {
   const line = (data) => data.map((v, i) => `${i === 0 ? 'M' : 'L'} ${x(i)} ${y(v)}`).join(' ');
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxWidth: W, height: 'auto' }}>
+    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Production plan chart showing demand, production, and inventory levels over time" style={{ width: '100%', maxWidth: W, height: 'auto' }}>
       {/* Zero line */}
       <line x1={M.left} y1={y(0)} x2={W - M.right} y2={y(0)} stroke={T.border} strokeWidth={1} />
       {/* Demand */}
@@ -325,7 +325,7 @@ function CapacityChart({ periods, loadHours, capacity, utilization, overloaded }
   const gap = iW / periods.length;
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxWidth: W, height: 'auto' }}>
+    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Capacity utilization bar chart showing load hours versus available capacity" style={{ width: '100%', maxWidth: W, height: 'auto' }}>
       {/* Capacity line */}
       <line x1={M.left} y1={M.top + iH - (capacity / maxLoad) * iH} x2={W - M.right} y2={M.top + iH - (capacity / maxLoad) * iH}
         stroke={T.risk} strokeWidth={1} strokeDasharray="6,3" />

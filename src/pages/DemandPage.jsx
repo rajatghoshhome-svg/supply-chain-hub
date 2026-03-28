@@ -108,7 +108,7 @@ export default function DemandPage() {
     <ModuleLayout moduleContext="demand" tabs={TABS} activeTab={tab} onTabChange={setTab}>
       <PageHeader title="Demand Planning" subtitle="Forecast & Analyze" />
 
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
+      <div className="module-content" style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
 
         {/* SKU Selector */}
         <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
@@ -230,8 +230,8 @@ export default function DemandPage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'JetBrains Mono' }}>
                       <thead>
                         <tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                          <th style={{ textAlign: 'left', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Period</th>
-                          <th style={{ textAlign: 'right', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Forecast</th>
+                          <th scope="col" style={{ textAlign: 'left', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Period</th>
+                          <th scope="col" style={{ textAlign: 'right', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Forecast</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -258,7 +258,7 @@ export default function DemandPage() {
                     <thead>
                       <tr style={{ borderBottom: `1px solid ${T.border}` }}>
                         {['Method', 'MAPE', 'MAD', 'Bias', 'Next 3 Periods'].map(h => (
-                          <th key={h} style={{ textAlign: h === 'Method' ? 'left' : 'right', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
+                          <th key={h} scope="col" style={{ textAlign: h === 'Method' ? 'left' : 'right', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -312,7 +312,7 @@ export default function DemandPage() {
                         </div>
                       ))}
                     </div>
-                    <svg width="100%" viewBox={`0 0 ${chartW} ${chartH}`} style={{ display: 'block' }}>
+                    <svg width="100%" viewBox={`0 0 ${chartW} ${chartH}`} role="img" aria-label={`Demand history bar chart for ${selectedSku}, showing ${d.length} weeks of data`} style={{ display: 'block' }}>
                       {/* Average line */}
                       <line x1={0} y1={chartH - (avg / maxVal) * (chartH - 10)} x2={chartW} y2={chartH - (avg / maxVal) * (chartH - 10)} stroke={T.accent} strokeDasharray="4 3" strokeWidth={1} opacity={0.5} />
                       {/* Bars */}
@@ -350,10 +350,10 @@ export default function DemandPage() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                     <thead>
                       <tr style={{ borderBottom: `1px solid ${T.border}`, position: 'sticky', top: 0, background: T.white }}>
-                        <th style={{ textAlign: 'left', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Week</th>
-                        <th style={{ textAlign: 'left', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Period</th>
-                        <th style={{ textAlign: 'right', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Demand</th>
-                        <th style={{ textAlign: 'left', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, width: 120 }}></th>
+                        <th scope="col" style={{ textAlign: 'left', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Week</th>
+                        <th scope="col" style={{ textAlign: 'left', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Period</th>
+                        <th scope="col" style={{ textAlign: 'right', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Demand</th>
+                        <th scope="col" style={{ textAlign: 'left', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, width: 120 }}></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -388,7 +388,7 @@ export default function DemandPage() {
               <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>Loading...</div>
             ) : demoData?.metrics ? (
               <div style={{ padding: '24px 20px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+                <div className="accuracy-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
                   {[
                     {
                       label: 'MAPE',

@@ -50,7 +50,9 @@ function formatDate() {
 
 function SeverityDot({ severity }) {
   return (
-    <span style={{
+    <span
+      aria-label={`${severity} severity`}
+      style={{
       display: 'inline-block',
       width: 7,
       height: 7,
@@ -189,7 +191,7 @@ export default function MorningBriefing() {
 
   if (loading) {
     return (
-      <div style={{ ...CARD, textAlign: 'center', padding: 40 }}>
+      <div aria-live="polite" style={{ ...CARD, textAlign: 'center', padding: 40 }}>
         <div style={{ ...LABEL, marginBottom: 8 }}>Loading Morning Briefing</div>
         <div style={{ fontSize: 12, color: T.inkLight }}>Running all 5 planning engines...</div>
       </div>
@@ -246,7 +248,7 @@ export default function MorningBriefing() {
           }}>
             ${financialImpact.total.toLocaleString()}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
+          <div className="financial-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
             <div>
               <div style={{ ...LABEL, fontSize: 9, marginBottom: 3 }}>Expedite Costs</div>
               <div style={{ ...SMALL_VALUE, color: financialImpact.expediteCosts > 0 ? T.risk : T.ink }}>
@@ -276,7 +278,7 @@ export default function MorningBriefing() {
       )}
 
       {/* 2x3 Grid of Module Snapshots */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+      <div className="briefing-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
 
         {/* Demand */}
         <SnapshotCard title="Demand Plan">

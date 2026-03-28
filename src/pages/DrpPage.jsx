@@ -42,7 +42,7 @@ export default function DrpPage() {
     <ModuleLayout moduleContext="drp" tabs={TABS} activeTab={tab} onTabChange={setTab}>
       <PageHeader title="Distribution Requirements Planning" subtitle="DRP" />
 
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
+      <div className="module-content" style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
 
         {/* Status bar */}
         {data && (
@@ -116,7 +116,7 @@ export default function DrpPage() {
                     <thead>
                       <tr style={{ borderBottom: `2px solid ${T.border}` }}>
                         {['Period', 'Gross Req', 'Sched Rcpt', 'Proj OH', 'Net Req', 'Pln Shipment', 'Pln Release'].map(h => (
-                          <th key={h} style={{ textAlign: h === 'Period' ? 'left' : 'right', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
+                          <th key={h} scope="col" style={{ textAlign: h === 'Period' ? 'left' : 'right', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -168,11 +168,11 @@ export default function DrpPage() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, fontFamily: 'JetBrains Mono' }}>
                     <thead>
                       <tr style={{ borderBottom: `2px solid ${T.border}` }}>
-                        <th style={{ textAlign: 'left', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>Period</th>
+                        <th scope="col" style={{ textAlign: 'left', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>Period</th>
                         {selectedResult.plantRequirements.byDC && Object.keys(selectedResult.plantRequirements.byDC).map(dc => (
-                          <th key={dc} style={{ textAlign: 'right', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{dc}</th>
+                          <th key={dc} scope="col" style={{ textAlign: 'right', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{dc}</th>
                         ))}
-                        <th style={{ textAlign: 'right', padding: '8px 10px', color: T.ink, fontWeight: 600, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>Total</th>
+                        <th scope="col" style={{ textAlign: 'right', padding: '8px 10px', color: T.ink, fontWeight: 600, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>Total</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -238,7 +238,7 @@ export default function DrpPage() {
                     <thead>
                       <tr style={{ borderBottom: `2px solid ${T.border}` }}>
                         {['Severity', 'SKU', 'Location', 'Type', 'Period', 'Qty', 'Message'].map(h => (
-                          <th key={h} style={{ textAlign: 'left', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
+                          <th key={h} scope="col" style={{ textAlign: 'left', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -315,7 +315,7 @@ function PlantReqChart({ periods, grossReqs, byDC }) {
 
   return (
     <div style={{ overflowX: 'auto' }}>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxWidth: W, height: 'auto' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Plant gross requirements stacked bar chart by distribution center" style={{ width: '100%', maxWidth: W, height: 'auto' }}>
         {/* Y-axis grid */}
         {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
           const y = M.top + innerH * (1 - pct);
@@ -399,7 +399,7 @@ function NetworkDiagram({ locations, lanes }) {
 
   return (
     <div>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxWidth: W, height: 'auto' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Distribution network topology diagram showing plant and DC connections" style={{ width: '100%', maxWidth: W, height: 'auto' }}>
         {/* Lanes (lines from plant to DCs) */}
         {dcs.map((dc, i) => {
           const dcX = dcSpacing * (i + 1);

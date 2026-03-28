@@ -16,6 +16,7 @@ import { networkRouter } from './routes/network.js';
 import { briefingRouter } from './routes/briefing.js';
 import { decisionsRouter } from './routes/decisions.js';
 import { externalRisksRouter } from './routes/external-risks.js';
+import { onboardingRouter } from './routes/onboarding.js';
 import { requestId, errorHandler } from './middleware/error-handler.js';
 
 const app = express();
@@ -42,6 +43,7 @@ app.use('/api/network', networkRouter);
 app.use('/api/briefing', briefingRouter);
 app.use('/api/decisions', decisionsRouter);
 app.use('/api/external-risks', externalRisksRouter);
+app.use('/api/onboarding', onboardingRouter);
 
 // Error handling
 app.use(errorHandler);

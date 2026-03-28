@@ -38,7 +38,7 @@ export default function SchedulingPage() {
     <ModuleLayout moduleContext="scheduling" tabs={TABS} activeTab={tab} onTabChange={setTab}>
       <PageHeader title="Production Scheduling" subtitle="Detailed Schedule" />
 
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
+      <div className="module-content" style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
 
         {/* Plant + Rule selector + stats */}
         <div style={{ display: 'flex', gap: 12, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -110,7 +110,7 @@ export default function SchedulingPage() {
                   <thead>
                     <tr style={{ borderBottom: `2px solid ${T.border}` }}>
                       {['Order', 'SKU', 'Qty', 'Proc Time', 'Start', 'End', 'Due Date', 'Status'].map(h => (
-                        <th key={h} style={{ textAlign: h === 'Order' || h === 'SKU' || h === 'Status' ? 'left' : 'right', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
+                        <th key={h} scope="col" style={{ textAlign: h === 'Order' || h === 'SKU' || h === 'Status' ? 'left' : 'right', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -224,7 +224,7 @@ function GanttChart({ schedule, makespan }) {
 
   return (
     <div>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxWidth: W, height: 'auto' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Gantt chart showing production schedule with ${schedule.length} orders over ${Math.round(makespan)}h makespan`} style={{ width: '100%', maxWidth: W, height: 'auto' }}>
         {/* Grid lines */}
         {gridLines.map(t => (
           <g key={t}>

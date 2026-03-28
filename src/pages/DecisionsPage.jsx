@@ -158,12 +158,12 @@ export default function DecisionsPage() {
   return (
     <div style={{ background: T.bg, minHeight: 'calc(100vh - 54px)', fontFamily: 'Inter' }}>
       {/* Header */}
-      <div style={{ background: T.white, borderBottom: `1px solid ${T.border}`, padding: '16px 52px' }}>
+      <div className="decisions-header" style={{ background: T.white, borderBottom: `1px solid ${T.border}`, padding: '16px 52px' }}>
         <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9.5, color: T.inkLight, letterSpacing: 1.5, marginBottom: 3, textTransform: 'uppercase' }}>Decision Log</div>
         <div style={{ fontFamily: 'Sora', fontWeight: 600, fontSize: 19, color: T.ink, letterSpacing: -0.4 }}>Planning Decisions · Audit Trail</div>
       </div>
 
-      <div style={{ maxWidth: 1160, margin: '0 auto', padding: '28px 52px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div className="decisions-body" style={{ maxWidth: 1160, margin: '0 auto', padding: '28px 52px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
         {/* Summary KPIs */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', background: T.white, border: `1px solid ${T.border}`, borderRadius: 10, overflow: 'hidden' }}>
@@ -259,7 +259,7 @@ export default function DecisionsPage() {
             </div>
             <div style={{ fontFamily: 'JetBrains Mono', fontSize: 11, color: T.inkLight }}>{filtered.length} records</div>
           </div>
-          <div>
+          <div className="decisions-table-scroll">
             {filtered.map((d, i) => {
               const s = statusStyle(d.status);
               const isUpdating = updating === d.id;

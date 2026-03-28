@@ -215,7 +215,9 @@ export default function WhatIfTheater() {
                 >
                   {/* Top row: severity dot + icon + headline */}
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                    <span style={{
+                    <span
+                      aria-label={isCritical ? 'Critical severity' : 'Warning severity'}
+                      style={{
                       display: 'inline-block',
                       width: 7, height: 7, borderRadius: '50%',
                       background: isCritical ? T.risk : T.warn,
@@ -332,7 +334,7 @@ export default function WhatIfTheater() {
 
       {/* Loading Indicator */}
       {loading && (
-        <div style={{ textAlign: 'center', padding: '32px 0' }}>
+        <div aria-live="polite" style={{ textAlign: 'center', padding: '32px 0' }}>
           <div style={{ fontFamily: 'JetBrains Mono', fontSize: 12, color: T.inkLight }}>
             Running {selected.length} cascade scenarios...
           </div>
@@ -344,11 +346,11 @@ export default function WhatIfTheater() {
 
       {/* Results Table */}
       {results && !loading && (
-        <div style={{ overflowX: 'auto' }}>
+        <div className="whatif-table-scroll" style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr>
-                <th style={{
+                <th scope="col" style={{
                   textAlign: 'left', padding: '10px 14px', borderBottom: `2px solid ${T.border}`,
                   fontFamily: 'Sora', fontWeight: 600, fontSize: 12, color: T.inkLight,
                   textTransform: 'uppercase', letterSpacing: 0.8,
@@ -356,7 +358,7 @@ export default function WhatIfTheater() {
                   Metric
                 </th>
                 {results.map((r, i) => (
-                  <th key={i} style={{
+                  <th key={i} scope="col" style={{
                     textAlign: 'right', padding: '10px 14px', borderBottom: `2px solid ${T.border}`,
                     fontFamily: 'Sora', fontWeight: 600, fontSize: 12, color: T.ink,
                     minWidth: 120,

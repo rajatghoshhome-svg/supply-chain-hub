@@ -84,7 +84,7 @@ export default function Landing() {
       {stats && (
         <div style={{ background: T.white, borderBottom: `1px solid ${T.border}` }}>
           <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', borderLeft: `1px solid ${T.border}` }}>
+            <div className="landing-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', borderLeft: `1px solid ${T.border}` }}>
               {[
                 { label: 'Products',     value: stats.skusPlanned,       color: T.ink },
                 { label: 'DCs Planned',   value: stats.locationsPlanned,  color: T.ink },
@@ -103,12 +103,12 @@ export default function Landing() {
       )}
 
       {/* Morning Briefing */}
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 40px 0' }}>
+      <div className="landing-section" style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 40px 0' }}>
         <MorningBriefing />
       </div>
 
       {/* ASCM Cascade Flow */}
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 40px' }}>
+      <div className="landing-section" style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 40px' }}>
         <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9.5, color: T.inkLight, letterSpacing: 1.4, marginBottom: 6, textTransform: 'uppercase' }}>ASCM MPC Framework</div>
         <h2 style={{ fontFamily: 'Sora', fontWeight: 600, fontSize: 18, color: T.ink, letterSpacing: -0.3, marginBottom: 20 }}>Planning Cascade</h2>
 
@@ -157,7 +157,7 @@ export default function Landing() {
       </div>
 
       {/* Live Cascade */}
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 40px 32px' }}>
+      <div className="landing-section" style={{ maxWidth: 1200, margin: '0 auto', padding: '0 40px 32px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
           <button
             onClick={handleRunFullCascade}
@@ -192,17 +192,17 @@ export default function Landing() {
       </div>
 
       {/* Network Architecture — Interactive Map */}
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 40px 32px' }}>
+      <div className="landing-section" style={{ maxWidth: 1200, margin: '0 auto', padding: '0 40px 32px' }}>
         <NetworkMap />
       </div>
 
       {/* What-If Theater */}
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 40px 32px' }}>
+      <div className="landing-section" style={{ maxWidth: 1200, margin: '0 auto', padding: '0 40px 32px' }}>
         <WhatIfTheater />
       </div>
 
       {/* Architecture */}
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 40px 32px' }}>
+      <div className="landing-section" style={{ maxWidth: 1200, margin: '0 auto', padding: '0 40px 32px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: '24px 28px' }}>
             <h3 style={{ fontFamily: 'Sora', fontWeight: 600, fontSize: 15, color: T.ink, marginBottom: 12 }}>Deterministic Engines</h3>

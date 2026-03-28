@@ -66,7 +66,7 @@ export default function ForecastChart({ historyPeriods, historyDemand, forecastP
 
   return (
     <div style={{ overflowX: 'auto' }}>
-      <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} style={{ width: '100%', maxWidth: CHART_WIDTH, height: 'auto' }}>
+      <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} role="img" aria-label={`Forecast chart showing actual demand and ${method || 'forecast'} predictions`} style={{ width: '100%', maxWidth: CHART_WIDTH, height: 'auto' }}>
         {/* Grid lines */}
         {yTicks.map((val, i) => (
           <g key={i}>

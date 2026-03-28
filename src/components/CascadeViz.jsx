@@ -126,7 +126,7 @@ export default function CascadeViz() {
       </div>
 
       {/* Step visualization */}
-      <div style={{ display: 'flex', gap: 0, alignItems: 'center' }}>
+      <div aria-live="polite" style={{ display: 'flex', gap: 0, alignItems: 'center' }}>
         {STEPS.map((step, i) => {
           const isComplete = currentStep > i || completedSteps.includes(step.id);
           const isCurrent = currentStep === i && running;
