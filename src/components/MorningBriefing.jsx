@@ -148,16 +148,16 @@ function SmallStat({ label, value, color }) {
 }
 
 const STATIC_BRIEFING = {
-  networkHealth: { suppliers: 4, plants: 2, dcs: 3, products: 3, lanes: 12 },
-  demandSnapshot: { totalForecast: 28450, topSku: 'FG-100', avgMape: 18.7 },
-  drpSnapshot: { skusPlanned: 3, exceptions: 5, critical: 1 },
-  productionSnapshot: { plantsActive: 2, recommendedStrategies: { 'PLANT-NORTH': 'chase', 'PLANT-SOUTH': 'hybrid' } },
+  networkHealth: { suppliers: 3, plants: 3, dcs: 3, products: 11, lanes: 18 },
+  demandSnapshot: { totalForecast: 34200, topSku: 'GRN-BAR', avgMape: 18.7 },
+  drpSnapshot: { skusPlanned: 11, exceptions: 5, critical: 1 },
+  productionSnapshot: { plantsActive: 3, recommendedStrategies: { 'PLT-PDX': 'chase', 'PLT-ATX': 'hybrid', 'PLT-NSH': 'level' } },
   schedulingSnapshot: { totalOrders: 14, avgMakespan: 32.6, totalLateOrders: 2 },
   mrpSnapshot: {
     totalExceptions: 8, critical: 2,
     topShortages: [
-      { sku: 'RAW-STL', name: 'Steel Stock', plant: 'PLANT-NORTH', message: 'Shortage in period 3' },
-      { sku: 'RAW-ALU', name: 'Aluminum Sheet', plant: 'PLANT-SOUTH', message: 'Shortage in period 5' },
+      { sku: 'WHY-PRO', name: 'Whey Protein Isolate', plant: 'PLT-PDX', message: 'Shortage in period 3' },
+      { sku: 'OAT-RLD', name: 'Rolled Oats', plant: 'PLT-PDX', message: 'Shortage in period 5' },
     ],
   },
   financialImpact: {
@@ -168,8 +168,8 @@ const STATIC_BRIEFING = {
     total: 15828,
   },
   attentionItems: [
-    { severity: 'critical', module: 'MRP', message: '2 critical MRP exceptions — material shortages may halt production', financialImpact: '$5,000 stockout risk' },
-    { severity: 'warning', module: 'DRP', message: '4 DRP warnings — safety stock violations at DC-WEST and DC-CENTRAL', financialImpact: '$800 expedite cost' },
+    { severity: 'critical', module: 'MRP', message: '2 critical MRP exceptions — material shortages may halt production at PLT-PDX', financialImpact: '$5,000 stockout risk' },
+    { severity: 'warning', module: 'DRP', message: '4 DRP warnings — safety stock violations at DC-LAS and DC-CHI', financialImpact: '$800 expedite cost' },
     { severity: 'warning', module: 'Scheduling', message: '2 late orders across 2 plants — review scheduling rules', financialImpact: '$2,400 overtime risk' },
   ],
 };

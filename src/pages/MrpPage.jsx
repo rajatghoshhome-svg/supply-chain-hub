@@ -10,7 +10,7 @@ const TABS = [
   { id: 'exceptions', label: 'Exceptions' },
 ];
 
-const PLANTS = ['PLANT-NORTH', 'PLANT-SOUTH', 'PLANT-WEST'];
+const PLANTS = ['PLT-PDX', 'PLT-ATX', 'PLT-NSH'];
 
 const LEVEL_COLORS = {
   0: { bg: T.ink, text: T.white, label: 'FG' },
@@ -20,78 +20,87 @@ const LEVEL_COLORS = {
 
 // ─── Static fallback data (used when API is unavailable, e.g. Vercel) ────
 const STATIC_MRP = {
-  planRunId: 'static', plant: 'PLANT-NORTH', skusPlanned: 3, totalExceptions: 3, criticalExceptions: 1,
+  planRunId: 'static', plant: 'PLT-PDX', skusPlanned: 5, totalExceptions: 4, criticalExceptions: 1,
   results: [
     {
-      skuCode: 'MTR-100', skuName: '1HP Standard Motor',
-      onHand: 120, safetyStock: 50, lotSizing: 'L4L', leadTime: 2, level: 0, criticalExceptions: 1,
+      skuCode: 'GRN-BAR', skuName: 'Oat & Honey Granola Bar',
+      onHand: 1200, safetyStock: 300, lotSizing: 'L4L', leadTime: 1, level: 0, criticalExceptions: 1,
       records: [
-        { period: 'W13', grossReq: 0, scheduledReceipts: 200, projectedOH: 320, netReq: 0, plannedOrderReceipt: 0, plannedOrderRelease: 0 },
-        { period: 'W14', grossReq: 153, scheduledReceipts: 0, projectedOH: 167, netReq: 0, plannedOrderReceipt: 0, plannedOrderRelease: 172 },
-        { period: 'W15', grossReq: 165, scheduledReceipts: 0, projectedOH: 2, netReq: 0, plannedOrderReceipt: 0, plannedOrderRelease: 166 },
-        { period: 'W16', grossReq: 172, scheduledReceipts: 0, projectedOH: 2, netReq: 172, plannedOrderReceipt: 172, plannedOrderRelease: 177 },
-        { period: 'W17', grossReq: 166, scheduledReceipts: 0, projectedOH: 8, netReq: 166, plannedOrderReceipt: 166, plannedOrderRelease: 0 },
-        { period: 'W18', grossReq: 177, scheduledReceipts: 0, projectedOH: -3, netReq: 177, plannedOrderReceipt: 177, plannedOrderRelease: 0 },
+        { period: 'W13', grossReq: 528, scheduledReceipts: 0, projectedOH: 672, netReq: 0, plannedOrderReceipt: 0, plannedOrderRelease: 0 },
+        { period: 'W14', grossReq: 515, scheduledReceipts: 0, projectedOH: 157, netReq: 0, plannedOrderReceipt: 0, plannedOrderRelease: 648 },
+        { period: 'W15', grossReq: 505, scheduledReceipts: 0, projectedOH: 0, netReq: 648, plannedOrderReceipt: 648, plannedOrderRelease: 638 },
+        { period: 'W16', grossReq: 495, scheduledReceipts: 648, projectedOH: 153, netReq: 0, plannedOrderReceipt: 0, plannedOrderRelease: 630 },
+        { period: 'W17', grossReq: 488, scheduledReceipts: 0, projectedOH: 0, netReq: 635, plannedOrderReceipt: 638, plannedOrderRelease: 0 },
+        { period: 'W18', grossReq: 480, scheduledReceipts: 638, projectedOH: 158, netReq: 0, plannedOrderReceipt: 0, plannedOrderRelease: 0 },
       ],
       exceptions: [
-        { severity: 'critical', type: 'expedite', message: 'Expedite 172 units of MTR-100 — needed W16 but lead time requires release W14' },
-        { severity: 'warning', type: 'reschedule-in', message: 'Reschedule SR of 200 from W13 to W15 to reduce carrying cost' },
+        { severity: 'critical', type: 'expedite', message: 'Expedite 648 cases of Oat & Honey Granola Bar — needed W15 but lead time requires release W14' },
+        { severity: 'warning', type: 'reschedule-in', message: 'Consider building ahead in W13 to smooth W15 peak demand' },
       ],
     },
     {
-      skuCode: 'MTR-200', skuName: '2HP Industrial Motor',
-      onHand: 60, safetyStock: 20, lotSizing: 'L4L', leadTime: 2, level: 0, criticalExceptions: 0,
+      skuCode: 'PRO-BAR', skuName: 'Peanut Butter Protein Bar',
+      onHand: 900, safetyStock: 250, lotSizing: 'L4L', leadTime: 1, level: 0, criticalExceptions: 0,
       records: [
-        { period: 'W13', grossReq: 0, scheduledReceipts: 0, projectedOH: 60, netReq: 0, plannedOrderReceipt: 0, plannedOrderRelease: 28 },
-        { period: 'W14', grossReq: 35, scheduledReceipts: 0, projectedOH: 25, netReq: 0, plannedOrderReceipt: 0, plannedOrderRelease: 40 },
-        { period: 'W15', grossReq: 28, scheduledReceipts: 0, projectedOH: 25, netReq: 28, plannedOrderReceipt: 28, plannedOrderRelease: 32 },
-        { period: 'W16', grossReq: 40, scheduledReceipts: 0, projectedOH: 13, netReq: 40, plannedOrderReceipt: 40, plannedOrderRelease: 38 },
-        { period: 'W17', grossReq: 32, scheduledReceipts: 0, projectedOH: 21, netReq: 32, plannedOrderReceipt: 32, plannedOrderRelease: 0 },
-        { period: 'W18', grossReq: 38, scheduledReceipts: 0, projectedOH: 21, netReq: 38, plannedOrderReceipt: 38, plannedOrderRelease: 0 },
+        { period: 'W13', grossReq: 395, scheduledReceipts: 0, projectedOH: 505, netReq: 0, plannedOrderReceipt: 0, plannedOrderRelease: 0 },
+        { period: 'W14', grossReq: 385, scheduledReceipts: 0, projectedOH: 120, netReq: 0, plannedOrderReceipt: 0, plannedOrderRelease: 510 },
+        { period: 'W15', grossReq: 375, scheduledReceipts: 0, projectedOH: 0, netReq: 505, plannedOrderReceipt: 510, plannedOrderRelease: 498 },
+        { period: 'W16', grossReq: 368, scheduledReceipts: 510, projectedOH: 142, netReq: 0, plannedOrderReceipt: 0, plannedOrderRelease: 490 },
+        { period: 'W17', grossReq: 360, scheduledReceipts: 498, projectedOH: 280, netReq: 0, plannedOrderReceipt: 0, plannedOrderRelease: 0 },
+        { period: 'W18', grossReq: 352, scheduledReceipts: 0, projectedOH: 0, netReq: 72, plannedOrderReceipt: 490, plannedOrderRelease: 0 },
       ],
       exceptions: [
-        { severity: 'warning', type: 'expedite', message: 'Release order for 28 units of MTR-200 in W13 for W15 receipt' },
+        { severity: 'warning', type: 'expedite', message: 'Release order for 510 cases of Protein Bar in W14 for W15 receipt' },
       ],
     },
     {
-      skuCode: 'MTR-500', skuName: '5HP Heavy Duty Motor',
-      onHand: 30, safetyStock: 10, lotSizing: 'L4L', leadTime: 3, level: 0, criticalExceptions: 0,
+      skuCode: 'TRL-MIX', skuName: 'Classic Trail Mix',
+      onHand: 650, safetyStock: 200, lotSizing: 'L4L', leadTime: 1, level: 0, criticalExceptions: 0,
       records: [
-        { period: 'W13', grossReq: 0, scheduledReceipts: 0, projectedOH: 30, netReq: 0, plannedOrderReceipt: 0, plannedOrderRelease: 10 },
-        { period: 'W14', grossReq: 18, scheduledReceipts: 0, projectedOH: 12, netReq: 0, plannedOrderReceipt: 0, plannedOrderRelease: 20 },
-        { period: 'W15', grossReq: 12, scheduledReceipts: 0, projectedOH: 10, netReq: 10, plannedOrderReceipt: 10, plannedOrderRelease: 16 },
-        { period: 'W16', grossReq: 20, scheduledReceipts: 0, projectedOH: 0, netReq: 20, plannedOrderReceipt: 20, plannedOrderRelease: 22 },
-        { period: 'W17', grossReq: 16, scheduledReceipts: 0, projectedOH: 0, netReq: 16, plannedOrderReceipt: 16, plannedOrderRelease: 0 },
-        { period: 'W18', grossReq: 22, scheduledReceipts: 0, projectedOH: 0, netReq: 22, plannedOrderReceipt: 22, plannedOrderRelease: 0 },
+        { period: 'W13', grossReq: 378, scheduledReceipts: 0, projectedOH: 272, netReq: 0, plannedOrderReceipt: 0, plannedOrderRelease: 295 },
+        { period: 'W14', grossReq: 367, scheduledReceipts: 0, projectedOH: 0, netReq: 295, plannedOrderReceipt: 295, plannedOrderRelease: 283 },
+        { period: 'W15', grossReq: 358, scheduledReceipts: 295, projectedOH: 0, netReq: 263, plannedOrderReceipt: 283, plannedOrderRelease: 275 },
+        { period: 'W16', grossReq: 350, scheduledReceipts: 283, projectedOH: 0, netReq: 267, plannedOrderReceipt: 275, plannedOrderRelease: 265 },
+        { period: 'W17', grossReq: 340, scheduledReceipts: 275, projectedOH: 0, netReq: 265, plannedOrderReceipt: 265, plannedOrderRelease: 0 },
+        { period: 'W18', grossReq: 332, scheduledReceipts: 265, projectedOH: 0, netReq: 267, plannedOrderReceipt: 267, plannedOrderRelease: 0 },
       ],
-      exceptions: [],
+      exceptions: [
+        { severity: 'warning', type: 'capacity', message: 'Trail Mix and Granola Bar compete for WC-P-MIXING in W14-W15 — check capacity' },
+      ],
     },
   ],
 };
 
 const STATIC_BOM = {
-  plant: 'PLANT-NORTH',
+  plant: 'PLT-PDX',
   tree: [
-    { code: 'MTR-100', name: '1HP Standard Motor', level: 0, children: [
-      { code: 'STATOR-100', name: 'Stator Assembly', level: 1, qtyPer: 1, children: [
-        { code: 'COPPER-WIRE', name: 'Copper Wire (2kg)', level: 2, qtyPer: 2, children: [] },
-        { code: 'LAMINATION', name: 'Steel Lamination', level: 2, qtyPer: 12, children: [] },
+    { code: 'GRN-BAR', name: 'Oat & Honey Granola Bar', level: 0, children: [
+      { code: 'MIX-OAT', name: 'Oat Dry Mix', level: 1, qtyPer: 1, children: [
+        { code: 'OAT-RLD', name: 'Rolled Oats', level: 2, qtyPer: 3.5, children: [] },
+        { code: 'HNY-RAW', name: 'Raw Honey', level: 2, qtyPer: 0.8, children: [] },
+        { code: 'SGR-ORG', name: 'Organic Cane Sugar', level: 2, qtyPer: 0.5, children: [] },
       ]},
-      { code: 'ROTOR-100', name: 'Rotor Assembly', level: 1, qtyPer: 1, children: [
-        { code: 'SHAFT-SM', name: 'Steel Shaft (Small)', level: 2, qtyPer: 1, children: [] },
-        { code: 'BEARING-6205', name: 'Bearing 6205', level: 2, qtyPer: 2, children: [] },
+      { code: 'PKG-FLM', name: 'Packaging Film (bar wrap)', level: 1, qtyPer: 24, children: [] },
+      { code: 'LBL-PRN', name: 'Printed Labels', level: 1, qtyPer: 1, children: [] },
+      { code: 'CTN-CSE', name: 'Corrugated Cases', level: 1, qtyPer: 1, children: [] },
+    ]},
+    { code: 'PRO-BAR', name: 'Peanut Butter Protein Bar', level: 0, children: [
+      { code: 'MIX-PRO', name: 'Protein Blend', level: 1, qtyPer: 1, children: [
+        { code: 'PNT-BTR', name: 'Peanut Butter (bulk)', level: 2, qtyPer: 2.0, children: [] },
+        { code: 'WHY-PRO', name: 'Whey Protein Isolate', level: 2, qtyPer: 1.5, children: [] },
+        { code: 'COCO-PWD', name: 'Cocoa Powder', level: 2, qtyPer: 0.4, children: [] },
       ]},
-      { code: 'HOUSING-SM', name: 'Cast Housing (Small)', level: 1, qtyPer: 1, children: [] },
+      { code: 'PKG-FLM', name: 'Packaging Film (bar wrap)', level: 1, qtyPer: 24, children: [] },
+      { code: 'CTN-CSE', name: 'Corrugated Cases', level: 1, qtyPer: 1, children: [] },
     ]},
-    { code: 'MTR-200', name: '2HP Industrial Motor', level: 0, children: [
-      { code: 'STATOR-200', name: 'Stator Assembly (2HP)', level: 1, qtyPer: 1, children: [] },
-      { code: 'ROTOR-200', name: 'Rotor Assembly (2HP)', level: 1, qtyPer: 1, children: [] },
-      { code: 'HOUSING-MD', name: 'Cast Housing (Medium)', level: 1, qtyPer: 1, children: [] },
-    ]},
-    { code: 'MTR-500', name: '5HP Heavy Duty Motor', level: 0, children: [
-      { code: 'STATOR-500', name: 'Stator Assembly (5HP)', level: 1, qtyPer: 1, children: [] },
-      { code: 'ROTOR-500', name: 'Rotor Assembly (5HP)', level: 1, qtyPer: 1, children: [] },
-      { code: 'HOUSING-LG', name: 'Cast Housing (Large)', level: 1, qtyPer: 1, children: [] },
+    { code: 'TRL-MIX', name: 'Classic Trail Mix', level: 0, children: [
+      { code: 'MIX-TRL', name: 'Trail Mix Blend', level: 1, qtyPer: 1, children: [
+        { code: 'ALM-RAW', name: 'Raw Almonds', level: 2, qtyPer: 2.0, children: [] },
+        { code: 'PNT-BTR', name: 'Peanut Butter (bulk)', level: 2, qtyPer: 0.5, children: [] },
+        { code: 'COCO-PWD', name: 'Cocoa Powder', level: 2, qtyPer: 0.3, children: [] },
+      ]},
+      { code: 'PKG-FLM', name: 'Packaging Film (bag)', level: 1, qtyPer: 12, children: [] },
+      { code: 'CTN-CSE', name: 'Corrugated Cases', level: 1, qtyPer: 1, children: [] },
     ]},
   ],
 };
@@ -102,7 +111,7 @@ export default function MrpPage() {
   const [bomData, setBomData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedSku, setSelectedSku] = useState(null);
-  const [selectedPlant, setSelectedPlant] = useState('PLANT-NORTH');
+  const [selectedPlant, setSelectedPlant] = useState('PLT-PDX');
   const [expandedBom, setExpandedBom] = useState(new Set());
   const [suggestions, setSuggestions] = useState({});
 
@@ -261,22 +270,22 @@ export default function MrpPage() {
                 ))}
 
                 {/* Dual-source callout */}
-                {selectedPlant === 'PLANT-NORTH' && (
+                {selectedPlant === 'PLT-PDX' && (
                   <div style={{
                     margin: '16px 20px 8px', padding: '10px 14px', background: T.warnBg,
                     border: `1px solid ${T.warnBorder}`, borderRadius: 8, fontSize: 11, color: T.warn,
                   }}>
-                    <strong>Dual-sourced:</strong> MTR-200 uses ROT-A (standard rotor) at this plant.
-                    At PLANT-SOUTH it uses ROT-B (heavy-duty) with different bearings and shaft.
+                    <strong>Dual-sourced:</strong> PRO-BAR uses MIX-PRO (whey protein blend) at Portland.
+                    At PLT-NSH it uses NUT-RST (roasted nut base) with different protein source.
                   </div>
                 )}
-                {selectedPlant === 'PLANT-SOUTH' && (
+                {selectedPlant === 'PLT-NSH' && (
                   <div style={{
                     margin: '16px 20px 8px', padding: '10px 14px', background: T.warnBg,
                     border: `1px solid ${T.warnBorder}`, borderRadius: 8, fontSize: 11, color: T.warn,
                   }}>
-                    <strong>Dual-sourced:</strong> MTR-200 uses ROT-B (heavy-duty rotor) at this plant.
-                    At PLANT-NORTH it uses ROT-A (standard) with different bearings and shaft.
+                    <strong>Dual-sourced:</strong> PRO-BAR uses NUT-RST (roasted nut base) at Nashville.
+                    At PLT-PDX it uses MIX-PRO (whey protein blend) with different protein source.
                   </div>
                 )}
               </div>
@@ -463,7 +472,7 @@ function BomNode({ node, depth, expanded, onToggle, selectedPlant }) {
   const hasChildren = node.children && node.children.length > 0;
   const isExpanded = expanded.has(node.code);
   const levelCfg = LEVEL_COLORS[node.level] || LEVEL_COLORS[2];
-  const isDualSource = node.code === 'MTR-200';
+  const isDualSource = node.code === 'PRO-BAR';
 
   return (
     <div>

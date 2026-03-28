@@ -3,12 +3,29 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { T } from '../styles/tokens';
 import {
-  networkLocations,
-  networkLanes,
+  plants,
+  distributionCenters,
+  suppliers as rawSuppliers,
+  lanes as rawLanes,
   products,
-  productSourcing,
-  suppliers,
+  plantProductSourcing,
 } from '../../server/src/data/synthetic-network.js';
+
+// Build unified location list from separate arrays (for Leaflet map)
+const networkLocations = [
+  ...plants.map(p => ({ code: p.code, type: 'plant', lat: p.lat, lng: p.lon, city: p.city, state: p.state, weeklyCapacity: null })),
+  ...distributionCenters.map(d => ({ code: d.code, type: 'dc', lat: d.lat, lng: d.lon, city: d.city, state: d.state })),
+  ...rawSuppliers.map(s => ({ code: s.code, type: 'supplier', lat: s.city === 'Fresno' ? 36.74 : s.city === 'Des Moines' ? 41.59 : 33.52, lng: s.city === 'Fresno' ? -119.77 : s.city === 'Des Moines' ? -93.61 : -86.80, city: s.city, state: s.state })),
+];
+
+// Build unified lane list with source/dest/laneType format
+const networkLanes = rawLanes.map(l => ({
+  source: l.from,
+  dest: l.to,
+  laneType: l.from.startsWith('SUP') ? 'inbound' : 'outbound',
+  leadTimeDays: l.leadTimeDays,
+  costPerLb: l.costPerLb,
+}));
 
 const TYPE_CONFIG = {
   supplier: { color: '#7C3AED', label: 'Supplier', symbol: '▲' },
@@ -63,18 +80,15 @@ export default function NetworkMap() {
       })
       .then(d => { setData(d); setLoading(false); })
       .catch(() => {
-        const supplierList = typeof suppliers === 'object' && suppliers
-          ? Object.entries(suppliers).map(([code, s]) => {
-              const loc = networkLocations.find(l => l.code === code);
-              return { code, ...s, ...(loc ? { lat: loc.lat, lng: loc.lng, city: loc.city, state: loc.state } : {}) };
-            })
-          : [];
         setData({
           locations: networkLocations,
           lanes: networkLanes,
           products,
-          productSourcing,
-          suppliers: supplierList,
+          productSourcing: plantProductSourcing,
+          suppliers: rawSuppliers.map(s => {
+            const loc = networkLocations.find(l => l.code === s.code);
+            return { ...s, ...(loc ? { lat: loc.lat, lng: loc.lng } : {}) };
+          }),
         });
         setLoading(false);
       });

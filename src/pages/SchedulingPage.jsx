@@ -11,29 +11,29 @@ const TABS = [
 ];
 
 const SKU_COLORS = {
-  'MTR-100': '#4F46E5', 'MTR-150': '#6366F1', 'MTR-200': '#059669',
-  'MTR-300': '#10B981', 'MTR-400': '#D97706', 'MTR-500': '#F59E0B',
-  'MTR-600': '#DC2626', 'MTR-700': '#7C3AED', 'MTR-800': '#8B5CF6',
-  'MTR-900': '#EC4899', 'MTR-1000': '#F43F5E',
+  'GRN-BAR': '#4F46E5', 'PRO-BAR': '#6366F1', 'TRL-MIX': '#059669',
+  'VEG-CHP': '#10B981', 'RCE-CRK': '#D97706', 'SPK-WAT': '#2563EB',
+  'JCE-APL': '#DC2626', 'KMB-GNG': '#7C3AED', 'NRG-CIT': '#F59E0B',
+  'CLD-BRW': '#EC4899', 'NUT-BTR': '#8B5CF6',
 };
 
-const PLANTS = ['PLANT-NORTH', 'PLANT-SOUTH', 'PLANT-WEST'];
+const PLANTS = ['PLT-PDX', 'PLT-ATX', 'PLT-NSH'];
 
 // ─── Static fallback data (used when API is unavailable, e.g. Vercel) ────
 const STATIC_SCHEDULE = {
   totalOrders: 6, makespan: 28.5, lateOrders: 1,
   schedule: [
-    { id: 'PO-4401', skuCode: 'MTR-100', qty: 200, processingTime: 4, startTime: 0, endTime: 4, dueDate: 'W14-Fri', late: false },
-    { id: 'PO-4402', skuCode: 'MTR-200', qty: 150, processingTime: 5.5, startTime: 4, endTime: 9.5, dueDate: 'W15-Wed', late: false },
-    { id: 'PO-4403', skuCode: 'MTR-500', qty: 100, processingTime: 6, startTime: 9.5, endTime: 15.5, dueDate: 'W15-Fri', late: false },
-    { id: 'PO-4404', skuCode: 'MTR-300', qty: 180, processingTime: 4.5, startTime: 15.5, endTime: 20, dueDate: 'W16-Mon', late: false },
-    { id: 'PO-4405', skuCode: 'MTR-400', qty: 120, processingTime: 3.5, startTime: 20, endTime: 23.5, dueDate: 'W16-Wed', late: false },
-    { id: 'PO-4406', skuCode: 'MTR-100', qty: 250, processingTime: 5, startTime: 23.5, endTime: 28.5, dueDate: 'W16-Tue', late: true, lateDays: 1 },
+    { id: 'PO-5501', skuCode: 'GRN-BAR', qty: 528, processingTime: 4.5, startTime: 0, endTime: 4.5, dueDate: 'W14-Fri', late: false },
+    { id: 'PO-5502', skuCode: 'PRO-BAR', qty: 395, processingTime: 5, startTime: 4.5, endTime: 9.5, dueDate: 'W15-Wed', late: false },
+    { id: 'PO-5503', skuCode: 'TRL-MIX', qty: 378, processingTime: 5.5, startTime: 9.5, endTime: 15, dueDate: 'W15-Fri', late: false },
+    { id: 'PO-5504', skuCode: 'VEG-CHP', qty: 334, processingTime: 4, startTime: 15, endTime: 19, dueDate: 'W16-Mon', late: false },
+    { id: 'PO-5505', skuCode: 'RCE-CRK', qty: 240, processingTime: 3.5, startTime: 19, endTime: 22.5, dueDate: 'W16-Wed', late: false },
+    { id: 'PO-5506', skuCode: 'GRN-BAR', qty: 648, processingTime: 6, startTime: 22.5, endTime: 28.5, dueDate: 'W16-Tue', late: true, lateDays: 1 },
   ],
   comparison: {
-    SPT: { makespan: 26.0, lateOrders: 2, sequence: ['PO-4405','PO-4401','PO-4404','PO-4402','PO-4406','PO-4403'] },
-    EDD: { makespan: 28.5, lateOrders: 1, sequence: ['PO-4401','PO-4402','PO-4403','PO-4404','PO-4405','PO-4406'] },
-    CR: { makespan: 27.5, lateOrders: 1, sequence: ['PO-4401','PO-4402','PO-4404','PO-4403','PO-4405','PO-4406'] },
+    SPT: { makespan: 26.0, lateOrders: 2, sequence: ['PO-5505','PO-5504','PO-5501','PO-5502','PO-5503','PO-5506'] },
+    EDD: { makespan: 28.5, lateOrders: 1, sequence: ['PO-5501','PO-5502','PO-5503','PO-5504','PO-5505','PO-5506'] },
+    CR: { makespan: 27.5, lateOrders: 1, sequence: ['PO-5501','PO-5502','PO-5504','PO-5503','PO-5505','PO-5506'] },
   },
 };
 
@@ -42,7 +42,7 @@ export default function SchedulingPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [rule, setRule] = useState('EDD');
-  const [plant, setPlant] = useState('PLANT-NORTH');
+  const [plant, setPlant] = useState('PLT-PDX');
 
   useEffect(() => {
     setLoading(true);

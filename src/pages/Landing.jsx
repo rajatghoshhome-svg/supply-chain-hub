@@ -48,7 +48,7 @@ export default function Landing() {
     fetch('/api/drp/demo')
       .then(r => r.json())
       .then(d => setStats(d))
-      .catch(() => setStats({ skusPlanned: 3, locationsPlanned: 3, plantsServed: 3, totalExceptions: 2, criticalExceptions: 1 }));
+      .catch(() => setStats({ skusPlanned: 11, locationsPlanned: 3, plantsServed: 3, totalExceptions: 2, criticalExceptions: 1 }));
   }, []);
 
   return (

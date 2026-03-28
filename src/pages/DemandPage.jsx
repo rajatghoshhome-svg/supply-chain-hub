@@ -15,31 +15,39 @@ const API = '/api/demand';
 
 // ─── Static fallback data (used when API is unavailable, e.g. Vercel) ────
 const STATIC_SKUS = [
-  { skuCode: 'MTR-100', skuName: '1HP Standard Motor' },
-  { skuCode: 'MTR-200', skuName: '2HP Industrial Motor' },
-  { skuCode: 'MTR-500', skuName: '5HP Heavy Duty Motor' },
+  { skuCode: 'GRN-BAR', skuName: 'Oat & Honey Granola Bar' },
+  { skuCode: 'PRO-BAR', skuName: 'Peanut Butter Protein Bar' },
+  { skuCode: 'TRL-MIX', skuName: 'Classic Trail Mix' },
+  { skuCode: 'VEG-CHP', skuName: 'Sea Salt Veggie Chips' },
+  { skuCode: 'RCE-CRK', skuName: 'Brown Rice Crackers' },
+  { skuCode: 'SPK-WAT', skuName: 'Lemon Sparkling Water' },
+  { skuCode: 'JCE-APL', skuName: 'Cold-Pressed Apple Juice' },
+  { skuCode: 'KMB-GNG', skuName: 'Ginger Kombucha' },
+  { skuCode: 'NRG-CIT', skuName: 'Citrus Energy Drink' },
+  { skuCode: 'CLD-BRW', skuName: 'Vanilla Cold Brew Coffee' },
+  { skuCode: 'NUT-BTR', skuName: 'Almond Nut Butter' },
 ];
 
 const STATIC_DEMO = {
-  status: 'ok', skuCode: 'MTR-100', skuName: '1HP Standard Motor',
+  status: 'ok', skuCode: 'GRN-BAR', skuName: 'Oat & Honey Granola Bar',
   bestMethod: 'holt-winters',
-  history: { periods: ['W01','W02','W03','W04','W05','W06','W07','W08','W09','W10','W11','W12'], demand: [120,135,128,142,138,155,149,160,152,168,162,175] },
-  forecast: { periods: ['W13','W14','W15','W16','W17','W18'], demand: [170,178,174,182,179,186] },
-  fitted: [122,133,130,140,139,153,150,158,154,166,163,173],
-  metrics: { mape: 3.2, mad: 4.8, bias: 1.2, trackingSignal: 0.8 },
+  history: { periods: ['W01','W02','W03','W04','W05','W06','W07','W08','W09','W10','W11','W12'], demand: [520,545,530,558,542,570,555,580,568,590,575,598] },
+  forecast: { periods: ['W13','W14','W15','W16','W17','W18'], demand: [528,515,505,495,488,480] },
+  fitted: [518,543,532,556,544,568,557,578,570,588,577,596],
+  metrics: { mape: 2.8, mad: 12.4, bias: -1.8, trackingSignal: -0.6 },
   allMethods: [
-    { method: 'holt-winters', mape: 3.2, mad: 4.8, bias: 1.2, forecast: [170,178,174,182,179,186] },
-    { method: 'exponential-smoothing', mape: 5.1, mad: 7.2, bias: -2.1, forecast: [165,172,169,176,173,180] },
-    { method: 'moving-average-3', mape: 6.8, mad: 9.5, bias: 0.5, forecast: [162,168,165,172,169,176] },
-    { method: 'moving-average-6', mape: 7.2, mad: 10.1, bias: -0.8, forecast: [158,164,161,168,165,172] },
-    { method: 'weighted-moving-avg', mape: 5.8, mad: 8.1, bias: 0.3, forecast: [167,174,171,178,175,182] },
+    { method: 'holt-winters', mape: 2.8, mad: 12.4, bias: -1.8, forecast: [528,515,505,495,488,480] },
+    { method: 'exponential-smoothing', mape: 4.5, mad: 18.2, bias: 3.2, forecast: [540,535,530,525,520,518] },
+    { method: 'moving-average-3', mape: 5.9, mad: 24.8, bias: 1.5, forecast: [554,548,542,538,534,530] },
+    { method: 'moving-average-6', mape: 6.4, mad: 26.1, bias: -2.4, forecast: [560,555,550,545,540,536] },
+    { method: 'weighted-moving-avg', mape: 4.1, mad: 16.8, bias: 0.8, forecast: [535,525,518,510,505,498] },
   ],
 };
 
 const STATIC_HISTORY = {
-  skuCode: 'MTR-100', skuName: '1HP Standard Motor',
+  skuCode: 'GRN-BAR', skuName: 'Oat & Honey Granola Bar',
   periods: ['W01','W02','W03','W04','W05','W06','W07','W08','W09','W10','W11','W12'],
-  demand: [120,135,128,142,138,155,149,160,152,168,162,175],
+  demand: [520,545,530,558,542,570,555,580,568,590,575,598],
 };
 
 const CASCADE_STEPS = [
@@ -53,7 +61,7 @@ const CASCADE_STEPS = [
 export default function DemandPage() {
   const [tab, setTab] = useState('forecast');
   const [skus, setSkus] = useState([]);
-  const [selectedSku, setSelectedSku] = useState('MTR-100');
+  const [selectedSku, setSelectedSku] = useState('GRN-BAR');
   const [demoData, setDemoData] = useState(null);
   const [historyData, setHistoryData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -145,7 +153,7 @@ export default function DemandPage() {
 
         {/* SKU Selector */}
         <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
-          {(skus.length > 0 ? skus : [{ skuCode: 'MTR-100', skuName: '1HP Standard Motor' }]).map(s => (
+          {(skus.length > 0 ? skus : [{ skuCode: 'GRN-BAR', skuName: 'Oat & Honey Granola Bar' }]).map(s => (
             <button
               key={s.skuCode}
               onClick={() => setSelectedSku(s.skuCode)}

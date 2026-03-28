@@ -1,136 +1,131 @@
-/**
- * Synthetic Demand History for Validation
- *
- * 52 weeks of weekly demand for the 3 finished goods from the motor BOM.
- * Includes realistic patterns: seasonality, trend, noise, and outliers.
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// Peakline Foods — 52-week Demand History
+// Realistic demand for $120M CPG company (hundreds to low thousands cases/week)
+//
+// Seasonality:
+//   - Beverages peak weeks 15-35 (spring/summer)
+//   - Bars/snacks peak weeks 36-50 (fall/winter, back-to-school, holiday)
+//   - Trail mix has additional holiday peaks (Thanksgiving/Christmas wk 44-51)
+//   - +/-15% noise, slight upward trend (~0.15% per week)
+// ─────────────────────────────────────────────────────────────────────────────
 
-// Seed-based deterministic "random" for reproducible noise
-function seededNoise(seed, amplitude) {
-  const x = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
-  return (x - Math.floor(x) - 0.5) * 2 * amplitude;
-}
-
-function generateWeeklyDemand({ base, trend, seasonAmplitude, noiseAmplitude, weeks, seed }) {
-  const demand = [];
-  for (let w = 0; w < weeks; w++) {
-    const trendComponent = trend * w;
-    const seasonComponent = seasonAmplitude * Math.sin((2 * Math.PI * w) / 52);
-    const noise = seededNoise(w + seed, noiseAmplitude);
-    const value = Math.max(0, Math.round(base + trendComponent + seasonComponent + noise));
-    demand.push(value);
-  }
-  return demand;
-}
-
-export const demandHistory = {
-  // MTR-100: Bread-and-butter product. Stable with mild seasonality.
-  'MTR-100': {
-    name: '1HP Standard Motor',
-    weekly: generateWeeklyDemand({
-      base: 18, trend: 0.05, seasonAmplitude: 5, noiseAmplitude: 3, weeks: 52, seed: 1,
-    }),
-  },
-
-  // MTR-200: Growing premium product. Clear upward trend.
-  'MTR-200': {
-    name: '2HP Premium Motor',
-    weekly: generateWeeklyDemand({
-      base: 8, trend: 0.15, seasonAmplitude: 3, noiseAmplitude: 2, weeks: 52, seed: 2,
-    }),
-  },
-
-  // MTR-500: Low-volume industrial. Lumpy demand.
-  'MTR-500': {
-    name: '5HP Industrial Motor',
-    weekly: generateWeeklyDemand({
-      base: 3, trend: 0.02, seasonAmplitude: 1, noiseAmplitude: 2, weeks: 52, seed: 3,
-    }),
-  },
-
-  // MTR-150: Compact motor. Steady mid-volume.
-  'MTR-150': {
-    name: '1.5HP Compact Motor',
-    weekly: generateWeeklyDemand({
-      base: 12, trend: 0.08, seasonAmplitude: 3, noiseAmplitude: 2, weeks: 52, seed: 4,
-    }),
-  },
-
-  // MTR-300: Mid-range motor. Moderate seasonality.
-  'MTR-300': {
-    name: '3HP Mid-Range Motor',
-    weekly: generateWeeklyDemand({
-      base: 10, trend: 0.06, seasonAmplitude: 4, noiseAmplitude: 2.5, weeks: 52, seed: 5,
-    }),
-  },
-
-  // MTR-400: Heavy-duty motor. Growing demand.
-  'MTR-400': {
-    name: '4HP Heavy-Duty Motor',
-    weekly: generateWeeklyDemand({
-      base: 6, trend: 0.12, seasonAmplitude: 2, noiseAmplitude: 1.5, weeks: 52, seed: 6,
-    }),
-  },
-
-  // MTR-600: High-torque motor. Stable, low volume.
-  'MTR-600': {
-    name: '6HP High-Torque Motor',
-    weekly: generateWeeklyDemand({
-      base: 4, trend: 0.03, seasonAmplitude: 1.5, noiseAmplitude: 1.5, weeks: 52, seed: 7,
-    }),
-  },
-
-  // MTR-700: Explosion-proof motor. Niche, lumpy.
-  'MTR-700': {
-    name: '7HP Explosion-Proof Motor',
-    weekly: generateWeeklyDemand({
-      base: 2, trend: 0.01, seasonAmplitude: 0.8, noiseAmplitude: 1.5, weeks: 52, seed: 8,
-    }),
-  },
-
-  // MTR-800: Marine-grade motor. Seasonal (summer peak).
-  'MTR-800': {
-    name: '8HP Marine-Grade Motor',
-    weekly: generateWeeklyDemand({
-      base: 5, trend: 0.04, seasonAmplitude: 4, noiseAmplitude: 2, weeks: 52, seed: 9,
-    }),
-  },
-
-  // MTR-900: Variable-speed motor. Growing fast.
-  'MTR-900': {
-    name: '9HP Variable-Speed Motor',
-    weekly: generateWeeklyDemand({
-      base: 3, trend: 0.18, seasonAmplitude: 1, noiseAmplitude: 1.5, weeks: 52, seed: 10,
-    }),
-  },
-
-  // MTR-1000: Ultra-heavy industrial. Very low volume, sporadic.
-  'MTR-1000': {
-    name: '10HP Ultra-Heavy Motor',
-    weekly: generateWeeklyDemand({
-      base: 1, trend: 0.01, seasonAmplitude: 0.5, noiseAmplitude: 1, weeks: 52, seed: 11,
-    }),
-  },
-};
-
-/**
- * Get demand history as period-labeled arrays
- */
-export function getDemandWithPeriods(skuCode) {
-  const data = demandHistory[skuCode];
-  if (!data) return null;
-
-  const base = new Date('2025-04-07'); // Start of history (1 year ago)
-  const periods = data.weekly.map((_, i) => {
-    const d = new Date(base);
-    d.setDate(d.getDate() + i * 7);
-    return d.toISOString().slice(0, 10);
-  });
-
-  return {
-    skuCode,
-    skuName: data.name,
-    periods,
-    demand: data.weekly,
+// Deterministic seeded PRNG for reproducible noise
+function seededRandom(seed) {
+  let s = seed;
+  return function () {
+    s = (s * 1664525 + 1013904223) & 0xffffffff;
+    return (s >>> 0) / 0xffffffff;
   };
 }
+
+// Seasonality multipliers by week (1-52)
+function beverageSeasonality(week) {
+  // Peak in summer (weeks 20-30), trough in winter
+  const center = 25;
+  const spread = 12;
+  const peak = 1.35;
+  const base = 0.72;
+  const x = (week - center) / spread;
+  return base + (peak - base) * Math.exp(-0.5 * x * x);
+}
+
+function barSnackSeasonality(week) {
+  // Peak in fall/winter (weeks 36-50), with back-to-school and holiday
+  const fallCenter = 43;
+  const spread = 8;
+  const peak = 1.30;
+  const base = 0.78;
+  const x = (week - fallCenter) / spread;
+  // Also a mild back-to-school bump (week 34-38)
+  const btsCenter = 36;
+  const btsSpread = 3;
+  const btsPeak = 1.10;
+  const bts = (btsPeak - 1.0) * Math.exp(-0.5 * ((week - btsCenter) / btsSpread) ** 2);
+  return base + (peak - base) * Math.exp(-0.5 * x * x) + bts;
+}
+
+function trailMixSeasonality(week) {
+  // Base bar/snack seasonality + extra Thanksgiving/Christmas peak
+  let base = barSnackSeasonality(week);
+  // Holiday bump weeks 44-51
+  if (week >= 44 && week <= 51) {
+    const holidayCenter = 48;
+    const x = (week - holidayCenter) / 3;
+    base += 0.20 * Math.exp(-0.5 * x * x);
+  }
+  return base;
+}
+
+// Base annual demand per SKU per DC (cases/week at mid-year average)
+// Total across 3 DCs * 52 weeks should sum to realistic annual volumes
+// ~$120M revenue / avg ~$25 per case = ~4.8M cases/year = ~92K cases/week total
+const baseDemand = {
+  // Bars — ~30% of volume
+  'GRN-BAR': { 'DC-ATL': 195, 'DC-CHI': 240, 'DC-LAS': 155 },  // ~590/wk = 30,680/yr
+  'PRO-BAR': { 'DC-ATL': 170, 'DC-CHI': 210, 'DC-LAS': 130 },  // ~510/wk = 26,520/yr
+
+  // Snacks — ~25% of volume
+  'TRL-MIX': { 'DC-ATL': 140, 'DC-CHI': 175, 'DC-LAS': 108 },  // ~423/wk = 21,996/yr
+  'VEG-CHP': { 'DC-ATL': 118, 'DC-CHI': 148, 'DC-LAS': 92 },   // ~358/wk = 18,616/yr
+  'RCE-CRK': { 'DC-ATL': 85, 'DC-CHI': 108, 'DC-LAS': 68 },    // ~261/wk = 13,572/yr
+  'NUT-BTR': { 'DC-ATL': 108, 'DC-CHI': 135, 'DC-LAS': 84 },   // ~327/wk = 17,004/yr
+
+  // Beverages — ~45% of volume
+  'SPK-WAT': { 'DC-ATL': 295, 'DC-CHI': 365, 'DC-LAS': 230 },  // ~890/wk = 46,280/yr
+  'JCE-APL': { 'DC-ATL': 102, 'DC-CHI': 128, 'DC-LAS': 80 },   // ~310/wk = 16,120/yr
+  'KMB-GNG': { 'DC-ATL': 75, 'DC-CHI': 95, 'DC-LAS': 60 },     // ~230/wk = 11,960/yr
+  'NRG-CIT': { 'DC-ATL': 205, 'DC-CHI': 255, 'DC-LAS': 160 },  // ~620/wk = 32,240/yr
+  'CLD-BRW': { 'DC-ATL': 58, 'DC-CHI': 74, 'DC-LAS': 46 },     // ~178/wk = 9,256/yr
+};
+
+const beverageSKUs = new Set(['SPK-WAT', 'JCE-APL', 'KMB-GNG', 'NRG-CIT', 'CLD-BRW']);
+const trailMixSKU = 'TRL-MIX';
+
+function generateDemandHistory() {
+  const rand = seededRandom(42);
+  const history = [];
+
+  // 52 weeks of history, starting from week 1 of the prior year
+  // Week 1 = first Monday of April 2025 (52 weeks back from late March 2026)
+  const startDate = new Date('2025-03-31'); // Monday
+
+  for (const [skuCode, dcDemand] of Object.entries(baseDemand)) {
+    for (const [dcCode, weeklyBase] of Object.entries(dcDemand)) {
+      for (let w = 0; w < 52; w++) {
+        const weekNum = (w % 52) + 1; // 1-52
+        const weekStart = new Date(startDate);
+        weekStart.setDate(weekStart.getDate() + w * 7);
+
+        // Determine seasonality
+        let seasonMult;
+        if (skuCode === trailMixSKU) {
+          seasonMult = trailMixSeasonality(weekNum);
+        } else if (beverageSKUs.has(skuCode)) {
+          seasonMult = beverageSeasonality(weekNum);
+        } else {
+          seasonMult = barSnackSeasonality(weekNum);
+        }
+
+        // Slight upward trend: +0.15% per week
+        const trendMult = 1 + 0.0015 * w;
+
+        // Random noise: +/-15%
+        const noise = 1 + (rand() * 0.30 - 0.15);
+
+        const qty = Math.round(weeklyBase * seasonMult * trendMult * noise);
+
+        history.push({
+          skuCode,
+          dcCode,
+          weekStart: weekStart.toISOString().split('T')[0],
+          periodType: 'weekly',
+          actualQty: Math.max(qty, 0),
+        });
+      }
+    }
+  }
+
+  return history;
+}
+
+export const demandHistory = generateDemandHistory();

@@ -23,9 +23,9 @@ const METRIC_ROWS = [
 const FALLBACK_RISKS = [
   {
     id: 'fallback-1', source: 'nws', type: 'weather', severity: 'warning',
-    headline: 'Winter Weather Advisory for Detroit metro area',
-    event: 'Winter Weather Advisory', location: 'PLANT-NORTH',
-    suggestedMultiplier: 0.7, suggestedScenarioLabel: 'Winter Storm: -30% PLANT-NORTH',
+    headline: 'Heat Advisory for Austin metro area',
+    event: 'Excessive Heat Warning', location: 'PLT-ATX',
+    suggestedMultiplier: 0.7, suggestedScenarioLabel: 'Heat Wave: -30% PLT-ATX',
   },
   {
     id: 'fallback-2', source: 'intelligence', type: 'geopolitical', severity: 'critical',
@@ -34,8 +34,8 @@ const FALLBACK_RISKS = [
   },
   {
     id: 'fallback-3', source: 'intelligence', type: 'commodity', severity: 'warning',
-    headline: 'Steel prices up 15% month-over-month', category: 'commodity',
-    suggestedMultiplier: 1.15, suggestedScenarioLabel: 'Steel Price Spike: +15% Material Cost',
+    headline: 'Oat prices up 15% month-over-month', category: 'commodity',
+    suggestedMultiplier: 1.15, suggestedScenarioLabel: 'Oat Price Spike: +15% Material Cost',
   },
 ];
 
