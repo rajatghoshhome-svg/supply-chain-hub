@@ -31,9 +31,9 @@ export default function Nav() {
           );
         })}
       </div>
-      <button onClick={() => navigate('/drp')} className="bp"
-        style={{ background: T.ink, color: T.white, border: 'none', padding: '8px 20px', borderRadius: 7, cursor: 'pointer', fontSize: 13, fontWeight: 500, fontFamily: 'Sora', letterSpacing: -0.1, transition: 'opacity 0.15s' }}>
-        Open DRP
+      <button onClick={() => navigate('/agent')} className="bp"
+        style={{ background: T.ink, color: T.white, border: 'none', padding: '8px 20px', borderRadius: 7, cursor: 'pointer', fontSize: 13, fontWeight: 500, fontFamily: 'Sora', letterSpacing: -0.1, transition: 'opacity 0.15s', minHeight: 44 }}>
+        Ask Agent
       </button>
     </nav>
   );
