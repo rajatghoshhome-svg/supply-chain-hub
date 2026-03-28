@@ -4,6 +4,7 @@ import ModuleLayout from '../components/shared/ModuleLayout';
 import PageHeader from '../components/shared/PageHeader';
 import Card from '../components/shared/Card';
 import TrustScore from '../components/TrustScore';
+import DataSourceBadge from '../components/shared/DataSourceBadge';
 
 const TABS = [
   { id: 'psi', label: 'Production Plan' },
@@ -127,12 +128,14 @@ export default function ProductionPlanPage() {
   const [lockedPeriods, setLockedPeriods] = useState({});
   const [editedCells, setEditedCells] = useState({});
   const [editingCell, setEditingCell] = useState(null);
+  const [isLive, setIsLive] = useState(false);
 
   useEffect(() => {
     fetch('/api/production-plan/demo')
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(d => {
         setRawData(d);
+        setIsLive(true);
         if (d.plantResults?.length > 0) {
           setSelectedPlant(d.plantResults[0].plantCode);
           if (d.plantResults[0].productPlans?.length > 0) {
@@ -143,6 +146,7 @@ export default function ProductionPlanPage() {
       })
       .catch(() => {
         console.warn('Production Plan API unavailable, using static fallback');
+        setIsLive(false);
         const d = STATIC_PROD_PLAN;
         setRawData(d);
         if (d.plantResults?.length > 0) {
@@ -196,6 +200,7 @@ export default function ProductionPlanPage() {
   return (
     <ModuleLayout moduleContext="production_plan" tabs={TABS} activeTab={tab} onTabChange={setTab}>
       <PageHeader title="Production Planning" subtitle="Aggregate & Capacity">
+        <DataSourceBadge isLive={isLive} />
         <TrustScore module="production" compact />
       </PageHeader>
 

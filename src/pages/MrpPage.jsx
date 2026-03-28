@@ -4,6 +4,7 @@ import ModuleLayout from '../components/shared/ModuleLayout';
 import PageHeader from '../components/shared/PageHeader';
 import Card from '../components/shared/Card';
 import TrustScore from '../components/TrustScore';
+import DataSourceBadge from '../components/shared/DataSourceBadge';
 
 const TABS = [
   { id: 'bom', label: 'Bill of Materials' },
@@ -121,6 +122,7 @@ export default function MrpPage() {
   const [newBomLine, setNewBomLine] = useState({ code: '', name: '', qtyPer: 1, scrapPct: 0 });
   const [bomSaving, setBomSaving] = useState(false);
   const [requirementsView, setRequirementsView] = useState('summary'); // 'summary' or 'explosion'
+  const [isLive, setIsLive] = useState(false);
   const [resolvedExceptions, setResolvedExceptions] = useState({}); // { index: { status, decidedBy } }
   const [actionLoading, setActionLoading] = useState(null); // index being acted on
 
@@ -164,6 +166,7 @@ export default function MrpPage() {
       .then(([mrp, bom]) => {
         setData(mrp);
         setBomData(bom);
+        setIsLive(true);
         if (mrp.results?.length > 0) setSelectedSku(mrp.results[0].skuCode);
         // Expand all FGs by default
         const expanded = new Set();
@@ -175,6 +178,7 @@ export default function MrpPage() {
         console.warn('MRP API unavailable, using static fallback');
         setData(STATIC_MRP);
         setBomData(STATIC_BOM);
+        setIsLive(false);
         if (STATIC_MRP.results?.length > 0) setSelectedSku(STATIC_MRP.results[0].skuCode);
         const expanded = new Set();
         STATIC_BOM.tree?.forEach(fg => expanded.add(fg.code));
@@ -315,6 +319,7 @@ export default function MrpPage() {
   return (
     <ModuleLayout moduleContext="mrp" tabs={TABS} activeTab={tab} onTabChange={setTab}>
       <PageHeader title="Material Planning" subtitle="Requirements & Bill of Materials">
+        <DataSourceBadge isLive={isLive} />
         <TrustScore module="mrp" compact />
       </PageHeader>
 

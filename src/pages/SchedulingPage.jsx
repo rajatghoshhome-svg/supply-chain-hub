@@ -4,6 +4,7 @@ import ModuleLayout from '../components/shared/ModuleLayout';
 import PageHeader from '../components/shared/PageHeader';
 import Card from '../components/shared/Card';
 import TrustScore from '../components/TrustScore';
+import DataSourceBadge from '../components/shared/DataSourceBadge';
 
 const TABS = [
   { id: 'gantt', label: 'Schedule' },
@@ -56,6 +57,7 @@ export default function SchedulingPage() {
   const [draggedIdx, setDraggedIdx] = useState(null);
   const [dragOverIdx, setDragOverIdx] = useState(null);
   const [resequencing, setResequencing] = useState(false);
+  const [isLive, setIsLive] = useState(false);
   const [resolvedOrders, setResolvedOrders] = useState({});
   const [orderActionLoading, setOrderActionLoading] = useState(null);
 
@@ -91,13 +93,14 @@ export default function SchedulingPage() {
     setLoading(true);
     fetch(`/api/scheduling/demo?rule=${rule}&plant=${plant}`)
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then(d => { setData(d); setLoading(false); })
-      .catch(() => { console.warn('Scheduling API unavailable, using static fallback'); setData(STATIC_SCHEDULE); setLoading(false); });
+      .then(d => { setData(d); setIsLive(true); setLoading(false); })
+      .catch(() => { console.warn('Scheduling API unavailable, using static fallback'); setData(STATIC_SCHEDULE); setIsLive(false); setLoading(false); });
   }, [rule, plant]);
 
   return (
     <ModuleLayout moduleContext="scheduling" tabs={TABS} activeTab={tab} onTabChange={setTab}>
       <PageHeader title="Production Scheduling" subtitle="Detailed Schedule">
+        <DataSourceBadge isLive={isLive} />
         <TrustScore module="scheduling" compact />
       </PageHeader>
       <div className="module-content" style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>

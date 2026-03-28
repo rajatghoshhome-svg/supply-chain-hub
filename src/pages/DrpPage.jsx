@@ -4,6 +4,7 @@ import ModuleLayout from '../components/shared/ModuleLayout';
 import PageHeader from '../components/shared/PageHeader';
 import Card from '../components/shared/Card';
 import TrustScore from '../components/TrustScore';
+import DataSourceBadge from '../components/shared/DataSourceBadge';
 
 const TABS = [
   { id: 'requirements', label: 'Replenishment Plan' },
@@ -117,6 +118,7 @@ export default function DrpPage() {
   const [approvedShipments, setApprovedShipments] = useState({});
   const [editingShipment, setEditingShipment] = useState(null);
   const [shipmentEdits, setShipmentEdits] = useState({});
+  const [isLive, setIsLive] = useState(false);
   const [resolvedExceptions, setResolvedExceptions] = useState({});
   const [actionLoading, setActionLoading] = useState(null);
   const [suggestions, setSuggestions] = useState({});
@@ -157,6 +159,7 @@ export default function DrpPage() {
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(d => {
         setData(d);
+        setIsLive(true);
         if (d.results?.length > 0) {
           setSelectedSku(d.results[0].skuCode);
           if (d.results[0].dcResults?.length > 0) {
@@ -167,6 +170,7 @@ export default function DrpPage() {
       })
       .catch(() => {
         console.warn('DRP API unavailable, using static fallback');
+        setIsLive(false);
         const d = STATIC_DRP;
         setData(d);
         if (d.results?.length > 0) {
@@ -248,6 +252,7 @@ export default function DrpPage() {
   return (
     <ModuleLayout moduleContext="drp" tabs={TABS} activeTab={tab} onTabChange={setTab}>
       <PageHeader title="Distribution Replenishment Planning" subtitle="Replenishment">
+        <DataSourceBadge isLive={isLive} />
         <TrustScore module="drp" compact />
       </PageHeader>
 
