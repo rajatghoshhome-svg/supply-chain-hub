@@ -16,7 +16,19 @@
 // These characters at the start of a cell can trigger formula execution
 // in spreadsheet applications (Excel, Google Sheets, LibreOffice)
 
-const FORMULA_PREFIXES = /^[=+\-@\t\r]/;
+// Formula prefixes: =, +, @, tab, carriage return always trigger.
+// A leading minus is treated as a formula prefix UNLESS the entire value
+// is a valid number (e.g., "-500" or "-3.14" are preserved).
+const FORMULA_PREFIX_CHARS = /^[=+@\t\r]/;
+
+function isFormulaPrefix(value) {
+  if (FORMULA_PREFIX_CHARS.test(value)) return true;
+  // Leading minus: only a formula if the whole value is not a valid number
+  if (value.startsWith('-') && isNaN(Number(value))) return true;
+  return false;
+}
+// Keep FORMULA_PREFIXES for backward compat in sanitizeCSVText
+const FORMULA_PREFIXES = { test: (v) => isFormulaPrefix(v) };
 
 // ─── Prompt Injection Patterns ────────────────────────────────────
 // Patterns that could manipulate LLM behavior if CSV data is fed to AI
@@ -40,6 +52,8 @@ const INJECTION_PATTERNS = [
   /\bforget your instructions\b/gi,
   /\byou are now\b/gi,
   /\bact as\b/gi,
+  /\bdo not follow\b/gi,
+  /\bdisregard\b.*\binstructions\b/gi,
 ];
 
 const MAX_FIELD_LENGTH = 10000;
@@ -53,8 +67,8 @@ export function sanitizeCell(value, row, col) {
   let cleaned = String(value).trim();
   const issues = [];
 
-  // Strip formula prefixes
-  if (FORMULA_PREFIXES.test(cleaned)) {
+  // Strip formula prefixes (preserves valid negative numbers like -500, -3.14)
+  if (isFormulaPrefix(cleaned)) {
     const original = cleaned;
     // Strip all leading formula characters
     cleaned = cleaned.replace(/^[=+\-@\t\r]+/, '');
@@ -216,8 +230,10 @@ export function sanitizeCSVText(csvText) {
       const isQuoted = val.startsWith('"') && val.endsWith('"');
       let inner = isQuoted ? val.slice(1, -1).replace(/""/g, '"') : val;
 
-      // Strip formula prefixes
-      inner = inner.replace(/^[=+\-@\t\r]+/, '');
+      // Strip formula prefixes (preserve valid negative numbers like -500)
+      if (isFormulaPrefix(inner)) {
+        inner = inner.replace(/^[=+\-@\t\r]+/, '');
+      }
 
       // Strip prompt injection patterns
       for (const pattern of INJECTION_PATTERNS) {

@@ -8,11 +8,12 @@
     "migrate": "drizzle-kit push"
   },
   "dependencies": {
-    "express": "^5.1.0",
     "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
     "drizzle-orm": "^0.44.2",
-    "postgres": "^3.4.7",
-    "dotenv": "^16.5.0"
+    "express": "^5.1.0",
+    "multer": "^2.1.1",
+    "postgres": "^3.4.7"
   },
   "devDependencies": {
     "drizzle-kit": "^0.31.4"
