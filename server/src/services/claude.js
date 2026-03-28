@@ -5,6 +5,11 @@
  * Each module gets a rich system prompt with ASCM context + live engine data.
  * Module-specific analyze endpoints (SSE) are on each route;
  * this service handles the general conversational chat.
+ *
+ * Context building is delegated to per-module builders in ./ai-context/.
+ * This file retains the 60s cache and the engine-running logic;
+ * each context builder receives the cached liveData snapshot and
+ * returns { systemPromptSection, dataSnapshot }.
  */
 
 import { runDRP } from '../engines/drp-engine.js';
@@ -28,6 +33,14 @@ import {
   productFamilies,
 } from '../data/synthetic-network.js';
 import { plantBOMs, getSkuByCode } from '../data/synthetic-bom.js';
+
+// Per-module context builders
+import { buildDemandChatContext } from './ai-context/demand-context.js';
+import { buildDRPChatContext } from './ai-context/drp-context.js';
+import { buildMRPChatContext } from './ai-context/mrp-context.js';
+import { buildProductionChatContext } from './ai-context/production-context.js';
+import { buildSchedulingChatContext } from './ai-context/scheduling-context.js';
+import { buildBriefingChatContext } from './ai-context/briefing.js';
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const MODEL = 'claude-sonnet-4-5-20250514';
@@ -236,95 +249,42 @@ function getLiveData() {
   }
 }
 
+/**
+ * Dispatch to per-module context builders.
+ * Each builder returns { systemPromptSection, dataSnapshot }.
+ * We extract systemPromptSection for the system prompt.
+ * Falls back to the briefing (general) context for unknown modules.
+ */
 function buildModuleContext(module) {
   const plants = getPlants();
   const dcs = getDCs();
-  const live = getLiveData();
+  const liveData = getLiveData();
 
-  let liveSection = '';
-  if (live) {
-    liveSection = `\n\n## LIVE ENGINE DATA (current state)\n`;
-    liveSection += `Planning Horizon: ${live.periods?.[0]} to ${live.periods?.[live.periods.length - 1]} (8 weekly periods)\n`;
-    liveSection += `DRP: ${live.drpResults} SKUs planned, ${live.drpExceptions} exceptions\n`;
+  // Common params shared across builders
+  const common = { plants, dcs, products, productFamilies, liveData };
 
-    if (live.demandSnapshots?.length > 0) {
-      liveSection += `\nDemand Forecasts:\n`;
-      for (const d of live.demandSnapshots) {
-        liveSection += `  ${d.sku}: best method=${d.method}, MAPE=${d.mape}%, next 4 periods=[${d.forecast.join(', ')}]\n`;
-      }
-    }
+  const builders = {
+    demand: () => buildDemandChatContext({
+      products, productFamilies, liveData,
+    }),
+    drp: () => buildDRPChatContext({
+      plants, dcs, products, networkLanes, liveData,
+    }),
+    mrp: () => buildMRPChatContext({
+      plants, plantBOMs, getProductsForPlant, liveData,
+    }),
+    production_plan: () => buildProductionChatContext({
+      plants, plantWorkCenters, getProductsForPlant, liveData,
+    }),
+    scheduling: () => buildSchedulingChatContext({
+      plants, plantWorkCenters, liveData,
+    }),
+    briefing: () => buildBriefingChatContext(common),
+  };
 
-    liveSection += `\nProduction Planning:\n`;
-    for (const [pc, s] of Object.entries(live.prodSummaries || {})) {
-      liveSection += `  ${pc}: total demand=${s.totalDemand} units, recommended strategy=${s.recommended}\n`;
-    }
-
-    liveSection += `\nScheduling (EDD rule):\n`;
-    for (const [pc, s] of Object.entries(live.schedSummaries || {})) {
-      liveSection += `  ${pc}: ${s.totalOrders} orders, makespan=${s.makespan}h, ${s.lateOrders} late\n`;
-    }
-
-    liveSection += `\nMRP Summary:\n`;
-    for (const [pc, s] of Object.entries(live.mrpSummaries || {})) {
-      liveSection += `  ${pc}: ${s.totalExceptions} exceptions (${s.critical} critical)`;
-      if (s.topShortages?.length > 0) {
-        liveSection += `, shortages: ${s.topShortages.map(sh => `${sh.sku} period ${sh.period} (${Math.round(sh.qty)} units)`).join(', ')}`;
-      }
-      liveSection += `\n`;
-    }
-  }
-
-  switch (module) {
-    case 'drp': {
-      const lines = ['\n## DRP Context'];
-      lines.push(`Network: ${plants.length} plants, ${dcs.length} DCs, ${products.length} products`);
-      lines.push(`Plants: ${plants.map(p => `${p.code} (${p.city})`).join(', ')}`);
-      lines.push(`DCs: ${dcs.map(d => `${d.code} (${d.city})`).join(', ')}`);
-      lines.push(`Lanes: ${networkLanes.filter(l => l.laneType === 'outbound').map(l => `${l.source}→${l.dest} (${l.leadTimePeriods}wk)`).join(', ')}`);
-      return lines.join('\n') + liveSection;
-    }
-    case 'demand': {
-      let ctx = `\n## Demand Planning Context\n${products.length} products tracked: ${products.map(p => `${p.code} (${p.name})`).join(', ')}\nFamilies: ${productFamilies.map(f => `${f.code} (${f.products.join(', ')})`).join('; ')}`;
-      return ctx + liveSection;
-    }
-    case 'production_plan': {
-      const lines = ['\n## Production Planning Context'];
-      for (const plant of plants) {
-        const wcs = plantWorkCenters[plant.code] || [];
-        lines.push(`${plant.code} (${plant.city}): capacity ${plant.weeklyCapacity} units/week, ${wcs.length} work centers`);
-        lines.push(`  Products: ${getProductsForPlant(plant.code).join(', ')}`);
-      }
-      return lines.join('\n') + liveSection;
-    }
-    case 'scheduling': {
-      const lines = ['\n## Scheduling Context'];
-      lines.push('Rules available: SPT (shortest processing time), EDD (earliest due date), CR (critical ratio)');
-      for (const plant of plants) {
-        const wcs = plantWorkCenters[plant.code] || [];
-        lines.push(`${plant.code}: ${wcs.map(w => `${w.code} (${w.name}, ${w.capacityHoursPerWeek}h/wk)`).join(', ')}`);
-      }
-      return lines.join('\n') + liveSection;
-    }
-    case 'mrp': {
-      const lines = ['\n## MRP Context'];
-      lines.push('Plant-specific BOMs — same FG may have different component structure per plant');
-      for (const plant of plants) {
-        const bom = plantBOMs[plant.code] || {};
-        const fgs = Object.keys(bom);
-        lines.push(`${plant.code}: ${fgs.length} FG BOMs defined (${fgs.join(', ')})`);
-      }
-      lines.push('\nDual-sourced: MTR-200 uses ROT-A at PLANT-NORTH, ROT-B at PLANT-SOUTH');
-      return lines.join('\n') + liveSection;
-    }
-    default: {
-      const lines = ['\n## Network Overview'];
-      lines.push(`${plants.length} plants, ${dcs.length} DCs, ${products.length} products, ${productFamilies.length} families`);
-      lines.push(`Plants: ${plants.map(p => `${p.code} (${p.city}, cap ${p.weeklyCapacity}/wk)`).join('; ')}`);
-      lines.push(`DCs: ${dcs.map(d => `${d.code} (${d.city})`).join('; ')}`);
-      lines.push(`Products: ${products.map(p => p.code).join(', ')}`);
-      return lines.join('\n') + liveSection;
-    }
-  }
+  const builder = builders[module] || builders.briefing;
+  const { systemPromptSection } = builder();
+  return systemPromptSection;
 }
 
 export async function streamChat({ module, messages, res }) {

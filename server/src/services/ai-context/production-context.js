@@ -127,6 +127,47 @@ export function buildProductionContext({ plantPlan, periods, rccp, plannerQuesti
 }
 
 /**
+ * Build lightweight chat context for the production planning module.
+ * Called from the central chat dispatcher with cached live data.
+ *
+ * @param {Object} params
+ * @param {Object[]} params.plants - Plant list
+ * @param {Object} params.plantWorkCenters - Work center data keyed by plant code
+ * @param {Function} params.getProductsForPlant - Function to get products per plant
+ * @param {Object} params.liveData - Cached live engine snapshot
+ * @returns {{ systemPromptSection: string, dataSnapshot: object }}
+ */
+export function buildProductionChatContext({ plants, plantWorkCenters, getProductsForPlant, liveData }) {
+  const lines = ['\n## Production Planning Context'];
+  for (const plant of plants) {
+    const wcs = plantWorkCenters[plant.code] || [];
+    lines.push(`${plant.code} (${plant.city}): capacity ${plant.weeklyCapacity} units/week, ${wcs.length} work centers`);
+    lines.push(`  Products: ${getProductsForPlant(plant.code).join(', ')}`);
+  }
+
+  const systemPromptSection = `\n## ASCM Production Planning Methodology
+Production strategies: Chase (match demand, variable workforce), Level (constant rate, build inventory), Hybrid (base rate + overtime/subcontract).
+Rough-Cut Capacity Planning (RCCP): validates MPS against critical work center capacity.
+Utilization > 90% = warning, > 100% = critical overload requiring action.
+Trade-offs: inventory carrying cost vs workforce volatility vs overtime premiums.
+Capabilities: strategy selection, bottleneck identification, overtime recommendations.`;
+
+  let dataSnapshot = null;
+  if (liveData?.prodSummaries) {
+    lines.push('\nProduction Planning:');
+    for (const [pc, s] of Object.entries(liveData.prodSummaries)) {
+      lines.push(`  ${pc}: total demand=${s.totalDemand} units, recommended strategy=${s.recommended}`);
+    }
+    dataSnapshot = { prodSummaries: liveData.prodSummaries };
+  }
+
+  return {
+    systemPromptSection: systemPromptSection + '\n' + lines.join('\n'),
+    dataSnapshot,
+  };
+}
+
+/**
  * Format production plan summary for API response.
  */
 export function formatProductionSummary(plantPlan) {

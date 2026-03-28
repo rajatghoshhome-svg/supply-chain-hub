@@ -131,3 +131,42 @@ Please provide:
 
   return { systemPrompt, userMessage };
 }
+
+/**
+ * Build lightweight chat context for the DRP module.
+ * Called from the central chat dispatcher with cached live data.
+ *
+ * @param {Object} params
+ * @param {Object[]} params.plants - Plant list
+ * @param {Object[]} params.dcs - DC list
+ * @param {Object[]} params.products - Product catalog
+ * @param {Object[]} params.networkLanes - Network lane definitions
+ * @param {Object} params.liveData - Cached live engine snapshot
+ * @returns {{ systemPromptSection: string, dataSnapshot: object }}
+ */
+export function buildDRPChatContext({ plants, dcs, products, networkLanes, liveData }) {
+  const lines = ['\n## DRP Context'];
+  lines.push(`Network: ${plants.length} plants, ${dcs.length} DCs, ${products.length} products`);
+  lines.push(`Plants: ${plants.map(p => `${p.code} (${p.city})`).join(', ')}`);
+  lines.push(`DCs: ${dcs.map(d => `${d.code} (${d.city})`).join(', ')}`);
+  lines.push(`Lanes: ${networkLanes.filter(l => l.laneType === 'outbound').map(l => `${l.source}→${l.dest} (${l.leadTimePeriods}wk)`).join(', ')}`);
+
+  const systemPromptSection = `\n## ASCM DRP Methodology
+DRP position in MPC cascade: Demand Plan -> DRP -> Production Plan -> MPS -> MRP.
+DRP netting logic mirrors MRP but at distribution level — net requirements become planned shipments.
+Lead time offset uses transit time (not manufacturing time).
+Fair-share allocation: when plant supply < total DC demand, allocate proportionally by priority.
+Exception types: expedite (transit lead time exceeds available time), rebalance, safety stock violation.
+Capabilities: rebalancing recommendations, source selection, network optimization.`;
+
+  let dataSnapshot = null;
+  if (liveData) {
+    lines.push(`\nDRP: ${liveData.drpResults} SKUs planned, ${liveData.drpExceptions} exceptions`);
+    dataSnapshot = { drpResults: liveData.drpResults, drpExceptions: liveData.drpExceptions };
+  }
+
+  return {
+    systemPromptSection: systemPromptSection + '\n' + lines.join('\n'),
+    dataSnapshot,
+  };
+}

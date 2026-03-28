@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { T } from '../styles/tokens';
 import ModuleLayout from '../components/shared/ModuleLayout';
 import PageHeader from '../components/shared/PageHeader';
@@ -13,6 +13,14 @@ const TABS = [
 
 const API = '/api/demand';
 
+const CASCADE_STEPS = [
+  { id: 'demand', label: 'Demand', event: 'cascade:demand_updated' },
+  { id: 'drp', label: 'DRP', event: 'cascade:drp_rebalanced' },
+  { id: 'production', label: 'Prod Plan', event: 'cascade:production_plan_changed' },
+  { id: 'scheduling', label: 'Scheduling', event: 'cascade:schedule_updated' },
+  { id: 'mrp', label: 'MRP', event: 'cascade:mrp_run_complete' },
+];
+
 export default function DemandPage() {
   const [tab, setTab] = useState('forecast');
   const [skus, setSkus] = useState([]);
@@ -22,6 +30,13 @@ export default function DemandPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Cascade state
+  const [cascadeActive, setCascadeActive] = useState(false);
+  const [cascadeStepsDone, setCascadeStepsDone] = useState(0);
+  const [cascadeStatus, setCascadeStatus] = useState(null); // 'running' | 'complete' | 'failed'
+  const [cascadePlanRunId, setCascadePlanRunId] = useState(null);
+  const sseRef = useRef(null);
+
   // Load SKU list
   useEffect(() => {
     fetch(`${API}/history`)
@@ -29,6 +44,41 @@ export default function DemandPage() {
       .then(data => setSkus(data.skus || []))
       .catch(() => {});
   }, []);
+
+  // Clean up SSE on unmount
+  useEffect(() => {
+    return () => { sseRef.current?.close(); };
+  }, []);
+
+  // Connect to cascade SSE and track progress
+  const connectCascadeSSE = (planRunId) => {
+    sseRef.current?.close();
+    setCascadeActive(true);
+    setCascadeStepsDone(0);
+    setCascadeStatus('running');
+    setCascadePlanRunId(planRunId);
+
+    const sse = new EventSource('/api/cascade/state');
+    sseRef.current = sse;
+
+    sse.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'step_complete') {
+          setCascadeStepsDone(prev => prev + 1);
+        }
+        if (data.type === 'cascade_complete') {
+          setCascadeStatus('complete');
+          setCascadeStepsDone(CASCADE_STEPS.length);
+          sse.close();
+        }
+        if (data.type === 'cascade_failed') {
+          setCascadeStatus('failed');
+          sse.close();
+        }
+      } catch {}
+    };
+  };
 
   // Load demo forecast when SKU changes
   useEffect(() => {
@@ -43,6 +93,11 @@ export default function DemandPage() {
       setDemoData(demo);
       setHistoryData(hist);
       setLoading(false);
+
+      // If the server triggered a cascade, connect SSE to track it
+      if (demo.cascade?.triggered) {
+        connectCascadeSSE(demo.cascade.planRunId);
+      }
     }).catch(err => {
       setError(err.message);
       setLoading(false);
@@ -79,6 +134,56 @@ export default function DemandPage() {
             </button>
           ))}
         </div>
+
+        {/* Cascade Progress Bar */}
+        {cascadeActive && (
+          <div style={{
+            background: T.white,
+            border: `1px solid ${cascadeStatus === 'complete' ? T.safe : cascadeStatus === 'failed' ? T.risk : T.accent}`,
+            borderRadius: 8,
+            padding: '12px 16px',
+            marginBottom: 16,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <div style={{ fontFamily: 'Sora', fontSize: 12, fontWeight: 600, color: T.ink }}>
+                {cascadeStatus === 'complete' ? 'Cascade Complete' : cascadeStatus === 'failed' ? 'Cascade Failed' : 'Cascade Triggered'}
+              </div>
+              {cascadePlanRunId && (
+                <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9, color: T.inkLight }}>{cascadePlanRunId}</div>
+              )}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              {CASCADE_STEPS.map((step, i) => {
+                const done = i < cascadeStepsDone;
+                const active = i === cascadeStepsDone && cascadeStatus === 'running';
+                return (
+                  <div key={step.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 4,
+                      padding: '3px 8px', borderRadius: 4,
+                      background: done ? `${T.safe}12` : active ? `${T.accent}12` : T.bgDark,
+                      border: `1px solid ${done ? T.safe : active ? T.accent : T.border}`,
+                      transition: 'all 0.3s',
+                    }}>
+                      <span style={{ fontSize: 10, color: done ? T.safe : active ? T.accent : T.inkLight }}>
+                        {done ? '\u2713' : active ? '\u23F3' : '\u2022'}
+                      </span>
+                      <span style={{
+                        fontFamily: 'JetBrains Mono', fontSize: 10, fontWeight: 500,
+                        color: done ? T.safe : active ? T.accent : T.inkLight,
+                      }}>
+                        {step.label}
+                      </span>
+                    </div>
+                    {i < CASCADE_STEPS.length - 1 && (
+                      <span style={{ fontSize: 10, color: done ? T.safe : T.inkGhost }}>{'\u2192'}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {error && (
           <Card>

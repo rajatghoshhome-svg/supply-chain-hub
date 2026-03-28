@@ -26,6 +26,7 @@ export default function MrpPage() {
   const [selectedSku, setSelectedSku] = useState(null);
   const [selectedPlant, setSelectedPlant] = useState('PLANT-NORTH');
   const [expandedBom, setExpandedBom] = useState(new Set());
+  const [suggestions, setSuggestions] = useState({});
 
   useEffect(() => {
     setLoading(true);
@@ -45,6 +46,35 @@ export default function MrpPage() {
       })
       .catch(() => setLoading(false));
   }, [selectedPlant]);
+
+  // Fetch AI suggestions when switching to exceptions tab
+  useEffect(() => {
+    if (tab !== 'exceptions' || !data?.results) return;
+    const allExc = data.results.flatMap(r => r.exceptions);
+    if (allExc.length === 0) return;
+    const payload = allExc.map(e => ({
+      module: 'mrp',
+      severity: e.severity,
+      message: e.message,
+      type: e.type,
+    }));
+    fetch('/api/decisions/suggest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ exceptions: payload }),
+    })
+      .then(r => r.json())
+      .then(results => {
+        const map = {};
+        results.forEach((r, i) => {
+          if (r.suggestion && r.suggestion.confidence > 0) {
+            map[i] = r.suggestion;
+          }
+        });
+        setSuggestions(map);
+      })
+      .catch(() => {});
+  }, [tab, data]);
 
   const allExceptions = data?.results?.flatMap(r => r.exceptions) || [];
   const expCounts = {
@@ -265,7 +295,7 @@ export default function MrpPage() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                     <thead>
                       <tr style={{ borderBottom: `2px solid ${T.border}` }}>
-                        {['Severity', 'SKU', 'Type', 'Period', 'Qty', 'Message'].map(h => (
+                        {['Severity', 'SKU', 'Type', 'Period', 'Qty', 'Message', 'AI Suggestion'].map(h => (
                           <th key={h} style={{ textAlign: 'left', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
                         ))}
                       </tr>
@@ -288,6 +318,24 @@ export default function MrpPage() {
                           <td style={{ padding: '8px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{e.period || e.fromPeriod || '—'}</td>
                           <td style={{ padding: '8px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{e.qty || '—'}</td>
                           <td style={{ padding: '8px 10px', fontSize: 12, color: T.inkMid }}>{e.message}</td>
+                          <td style={{ padding: '8px 10px' }}>
+                            {suggestions[i] && suggestions[i].confidence >= 30 && (
+                              <span style={{
+                                display: 'inline-block',
+                                padding: '3px 8px',
+                                borderRadius: 4,
+                                fontSize: 10,
+                                fontWeight: 500,
+                                fontFamily: 'JetBrains Mono',
+                                background: suggestions[i].confidence >= 60 ? '#e6f4ea' : '#fef3e0',
+                                color: suggestions[i].confidence >= 60 ? '#1a7f37' : '#9a6700',
+                                border: `1px solid ${suggestions[i].confidence >= 60 ? '#a7d9b2' : '#f0c87a'}`,
+                                whiteSpace: 'nowrap',
+                              }}>
+                                AI: {suggestions[i].suggestedAction} ({suggestions[i].confidence}%)
+                              </span>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

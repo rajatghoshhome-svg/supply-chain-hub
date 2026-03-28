@@ -21,6 +21,7 @@ import {
 import { buildDemandContext } from '../services/ai-context/demand-context.js';
 import { demandHistory, getDemandWithPeriods } from '../data/synthetic-demand.js';
 import { ValidationError } from '../middleware/error-handler.js';
+import { triggerFullCascade } from '../services/cascade-handlers.js';
 
 export const demandRouter = Router();
 
@@ -62,7 +63,7 @@ demandRouter.get('/history', (req, res) => {
 
 // ─── POST /api/demand/forecast ────────────────────────────────────
 
-demandRouter.post('/forecast', (req, res, next) => {
+demandRouter.post('/forecast', async (req, res, next) => {
   try {
     const { history, method, periods = 8, params = {} } = req.body;
 
@@ -90,6 +91,11 @@ demandRouter.post('/forecast', (req, res, next) => {
       forecasts: result.fitted,
     });
 
+    // Trigger the ASCM cascade: Demand -> DRP -> Prod Plan -> Scheduling -> MRP
+    const cascadeResult = await triggerFullCascade({
+      triggeredBy: 'demand-forecast',
+    });
+
     res.json({
       status: 'ok',
       method: result.method || method,
@@ -98,6 +104,11 @@ demandRouter.post('/forecast', (req, res, next) => {
       metrics,
       ...(result.allMethods && { allMethods: result.allMethods }),
       ...(result.bestMethod && { bestMethod: result.bestMethod }),
+      cascade: {
+        triggered: true,
+        planRunId: cascadeResult.planRunId,
+        queued: cascadeResult.queued || false,
+      },
     });
   } catch (err) {
     next(err);
@@ -106,7 +117,7 @@ demandRouter.post('/forecast', (req, res, next) => {
 
 // ─── GET /api/demand/demo/:skuCode — Best-fit on synthetic data ───
 
-demandRouter.get('/demo/:skuCode', (req, res, next) => {
+demandRouter.get('/demo/:skuCode', async (req, res, next) => {
   try {
     const data = getDemandWithPeriods(req.params.skuCode);
     if (!data) {
@@ -130,6 +141,11 @@ demandRouter.get('/demo/:skuCode', (req, res, next) => {
       forecastPeriods.push(d.toISOString().slice(0, 10));
     }
 
+    // Trigger the ASCM cascade: Demand -> DRP -> Prod Plan -> Scheduling -> MRP
+    const cascadeResult = await triggerFullCascade({
+      triggeredBy: 'demand-demo',
+    });
+
     res.json({
       status: 'ok',
       skuCode: data.skuCode,
@@ -146,6 +162,11 @@ demandRouter.get('/demo/:skuCode', (req, res, next) => {
       fitted: result.fitted,
       metrics,
       allMethods: result.allMethods,
+      cascade: {
+        triggered: true,
+        planRunId: cascadeResult.planRunId,
+        queued: cascadeResult.queued || false,
+      },
     });
   } catch (err) {
     next(err);

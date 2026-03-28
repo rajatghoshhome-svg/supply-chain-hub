@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getDecisions, getTrustScore, logDecision, updateDecisionStatus, getDecisionById } from '../services/decision-service.js';
+import { suggestResolutions, getLearningStats } from '../services/exception-learning.js';
 
 export const decisionsRouter = Router();
 
@@ -12,6 +13,30 @@ decisionsRouter.get('/', (req, res, next) => {
       limit: limit ? Number(limit) : undefined,
     });
     res.json(decisions);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/decisions/suggest — suggest resolutions for exceptions
+decisionsRouter.post('/suggest', (req, res, next) => {
+  try {
+    const { exceptions } = req.body;
+    if (!exceptions || !Array.isArray(exceptions)) {
+      return res.status(400).json({ error: 'exceptions array is required' });
+    }
+    const suggestions = suggestResolutions(exceptions);
+    res.json(suggestions);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/decisions/learning-stats — learning stats
+decisionsRouter.get('/learning-stats', (req, res, next) => {
+  try {
+    const stats = getLearningStats();
+    res.json(stats);
   } catch (err) {
     next(err);
   }

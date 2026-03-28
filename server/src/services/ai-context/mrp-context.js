@@ -149,6 +149,52 @@ export function buildMRPContext({ mrpResults, bomTree, periods, plannerQuestion 
 }
 
 /**
+ * Build lightweight chat context for the MRP module.
+ * Called from the central chat dispatcher with cached live data.
+ *
+ * @param {Object} params
+ * @param {Object[]} params.plants - Plant list
+ * @param {Object} params.plantBOMs - BOM data keyed by plant code
+ * @param {Function} params.getProductsForPlant - Function to get products per plant
+ * @param {Object} params.liveData - Cached live engine snapshot
+ * @returns {{ systemPromptSection: string, dataSnapshot: object }}
+ */
+export function buildMRPChatContext({ plants, plantBOMs, getProductsForPlant, liveData }) {
+  const lines = ['\n## MRP Context'];
+  lines.push('Plant-specific BOMs — same FG may have different component structure per plant');
+  for (const plant of plants) {
+    const bom = plantBOMs[plant.code] || {};
+    const fgs = Object.keys(bom);
+    lines.push(`${plant.code}: ${fgs.length} FG BOMs defined (${fgs.join(', ')})`);
+  }
+  lines.push('\nDual-sourced: MTR-200 uses ROT-A at PLANT-NORTH, ROT-B at PLANT-SOUTH');
+
+  const systemPromptSection = `\n## ASCM MRP Methodology
+MRP netting logic: Gross Requirements - Scheduled Receipts - On Hand = Net Requirements.
+Lead time offsetting: Planned Order Release = Planned Order Receipt offset by lead time.
+Lot sizing rules: lot-for-lot, FOQ (fixed order quantity), POQ (period order quantity).
+Exception types: expedite (need date < release date), defer, cancel, reschedule.
+Capabilities: expedite/defer recommendations, substitute suggestions, exception prioritization.`;
+
+  let dataSnapshot = null;
+  if (liveData?.mrpSummaries) {
+    lines.push('\nMRP Summary:');
+    for (const [pc, s] of Object.entries(liveData.mrpSummaries)) {
+      lines.push(`  ${pc}: ${s.totalExceptions} exceptions (${s.critical} critical)`);
+      if (s.topShortages?.length > 0) {
+        lines.push(`    shortages: ${s.topShortages.map(sh => `${sh.sku} period ${sh.period} (${Math.round(sh.qty)} units)`).join(', ')}`);
+      }
+    }
+    dataSnapshot = { mrpSummaries: liveData.mrpSummaries };
+  }
+
+  return {
+    systemPromptSection: systemPromptSection + '\n' + lines.join('\n'),
+    dataSnapshot,
+  };
+}
+
+/**
  * Format a single MRP record for display (used by route)
  */
 export function formatMRPSummary(mrpResults) {

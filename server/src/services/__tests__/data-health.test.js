@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateRecord, validateBatch, applyFixes, rules } from '../data-health.js';
+import { validateRecord, validateBatch, applyFixes, runHealthChecks, rules } from '../data-health.js';
 
 describe('Self-Healing Data Validation', () => {
   describe('Lead Time Rules', () => {
@@ -174,5 +174,82 @@ describe('Selective Rule Running', () => {
     // Only lead time rule should have run
     expect(result.autoFixed).toHaveLength(1);
     expect(result.autoFixed[0].rule).toBe('leadTimePositive');
+  });
+});
+
+describe('runHealthChecks — Dataset-Level', () => {
+  it('auto-fixes lead time = 0 to 1', () => {
+    const data = {
+      skus: [{ code: 'SKU-A' }],
+      boms: [],
+      inventory: [],
+      planningParams: [{ sku: 'SKU-A', leadTimeWeeks: 0, safetyStock: 10 }],
+    };
+    const result = runHealthChecks(data);
+    expect(result.autoFixed.some(f => f.rule === 'leadTimeZero')).toBe(true);
+    expect(data.planningParams[0].leadTimeWeeks).toBe(1);
+  });
+
+  it('auto-fixes negative safety stock to 0', () => {
+    const data = {
+      skus: [{ code: 'SKU-A' }],
+      boms: [],
+      inventory: [],
+      planningParams: [{ sku: 'SKU-A', leadTimeWeeks: 2, safetyStock: -50 }],
+    };
+    const result = runHealthChecks(data);
+    expect(result.autoFixed.some(f => f.rule === 'safetyStockNegative')).toBe(true);
+    expect(data.planningParams[0].safetyStock).toBe(0);
+  });
+
+  it('blocks BOM child referencing non-existent SKU', () => {
+    const data = {
+      skus: [{ code: 'PARENT-1' }],
+      boms: [{ parent: 'PARENT-1', child: 'GHOST-SKU', quantityPer: 2 }],
+      inventory: [],
+      planningParams: [],
+    };
+    const result = runHealthChecks(data);
+    expect(result.blocked.some(b => b.rule === 'bomChildMissing')).toBe(true);
+    expect(result.blocked[0].value).toBe('GHOST-SKU');
+  });
+
+  it('auto-fixes negative demand to 0', () => {
+    const data = {
+      skus: [{ code: 'SKU-A' }],
+      boms: [],
+      inventory: [],
+      planningParams: [],
+      demand: [{ sku: 'SKU-A', quantity: -200 }],
+    };
+    const result = runHealthChecks(data);
+    expect(result.autoFixed.some(f => f.rule === 'demandNegative')).toBe(true);
+    expect(data.demand[0].quantity).toBe(0);
+  });
+
+  it('auto-switches FOQ with qty 0 to lot-for-lot', () => {
+    const data = {
+      skus: [{ code: 'SKU-A' }],
+      boms: [],
+      inventory: [],
+      planningParams: [{ sku: 'SKU-A', leadTimeWeeks: 2, lotSizeRule: 'fixed-order-qty', lotSizeValue: 0 }],
+    };
+    const result = runHealthChecks(data);
+    expect(result.autoFixed.some(f => f.rule === 'lotSizeFOQZero')).toBe(true);
+    expect(data.planningParams[0].lotSizeRule).toBe('lot-for-lot');
+  });
+
+  it('passes valid data with no issues', () => {
+    const data = {
+      skus: [{ code: 'SKU-A' }, { code: 'SKU-B' }],
+      boms: [{ parent: 'SKU-A', child: 'SKU-B', quantityPer: 1 }],
+      inventory: [{ sku: 'SKU-A', onHand: 100 }],
+      planningParams: [{ sku: 'SKU-A', leadTimeWeeks: 2, safetyStock: 10, lotSizeRule: 'lot-for-lot' }],
+      demand: [{ sku: 'SKU-A', quantity: 50 }],
+    };
+    const result = runHealthChecks(data);
+    expect(result.autoFixed).toHaveLength(0);
+    expect(result.flagged).toHaveLength(0);
+    expect(result.blocked).toHaveLength(0);
   });
 });

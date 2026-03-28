@@ -107,3 +107,43 @@ export function buildSchedulingContext({ scheduleResult, plant, rule, periods, p
 
   return { systemPrompt: SYSTEM_PROMPT, userMessage };
 }
+
+/**
+ * Build lightweight chat context for the scheduling module.
+ * Called from the central chat dispatcher with cached live data.
+ *
+ * @param {Object} params
+ * @param {Object[]} params.plants - Plant list
+ * @param {Object} params.plantWorkCenters - Work center data keyed by plant code
+ * @param {Object} params.liveData - Cached live engine snapshot
+ * @returns {{ systemPromptSection: string, dataSnapshot: object }}
+ */
+export function buildSchedulingChatContext({ plants, plantWorkCenters, liveData }) {
+  const lines = ['\n## Scheduling Context'];
+  lines.push('Rules available: SPT (shortest processing time), EDD (earliest due date), CR (critical ratio)');
+  for (const plant of plants) {
+    const wcs = plantWorkCenters[plant.code] || [];
+    lines.push(`${plant.code}: ${wcs.map(w => `${w.code} (${w.name}, ${w.capacityHoursPerWeek}h/wk)`).join(', ')}`);
+  }
+
+  const systemPromptSection = `\n## ASCM Scheduling Methodology
+Sequencing rules: SPT (minimizes avg flow time/WIP), EDD (minimizes max lateness), CR (critical ratio — prioritizes tightest due dates).
+Changeover time between different SKU families is a real cost — group similar products.
+Closed loop: schedule timing shifts -> MRP material needs adjust -> signals back to MPS.
+Key KPIs: makespan, late orders (target zero), average flow time, utilization.
+Capabilities: sequence optimization, constraint relaxation suggestions, rule comparison.`;
+
+  let dataSnapshot = null;
+  if (liveData?.schedSummaries) {
+    lines.push('\nScheduling (EDD rule):');
+    for (const [pc, s] of Object.entries(liveData.schedSummaries)) {
+      lines.push(`  ${pc}: ${s.totalOrders} orders, makespan=${s.makespan}h, ${s.lateOrders} late`);
+    }
+    dataSnapshot = { schedSummaries: liveData.schedSummaries };
+  }
+
+  return {
+    systemPromptSection: systemPromptSection + '\n' + lines.join('\n'),
+    dataSnapshot,
+  };
+}
