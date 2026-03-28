@@ -1,10 +1,12 @@
+import { useNavigate } from 'react-router-dom';
 import { T } from '../styles/tokens';
 import { DCS } from '../data/dcs';
 import Logo from '../components/Logo';
 import LeafletMap from '../components/LeafletMap';
 import AgentChat from '../components/AgentChat';
 
-export default function Landing({ setPage }) {
+export default function Landing() {
+  const navigate = useNavigate();
   const atRisk = [...new Set(DCS.flatMap(dc => dc.customers.filter(c => c.atRisk).map(c => c.name)))];
   const avgFR = (DCS.reduce((s, dc) => s + dc.fillRate, 0) / DCS.length).toFixed(1);
 
@@ -38,7 +40,7 @@ export default function Landing({ setPage }) {
             <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9.5, color: T.inkLight, letterSpacing: 1.4, marginBottom: 3, textTransform: 'uppercase' }}>Live Network — November 4, 2024</div>
             <div style={{ fontFamily: 'Sora', fontWeight: 600, fontSize: 18, color: T.ink, letterSpacing: -0.4 }}>Distribution Network · Customer Exposure</div>
           </div>
-          <button onClick={() => setPage('workflow')} className="bp"
+          <button onClick={() => navigate('/drp')} className="bp"
             style={{ background: T.ink, color: T.white, border: 'none', padding: '9px 20px', borderRadius: 7, cursor: 'pointer', fontSize: 13, fontWeight: 500, fontFamily: 'Sora', transition: 'opacity 0.15s' }}>
             Open Workflow
           </button>
@@ -48,7 +50,7 @@ export default function Landing({ setPage }) {
             <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9.5, color: T.inkLight, letterSpacing: 1.3, textTransform: 'uppercase' }}>Hover any DC to see customer order detail</div>
             <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9.5, color: T.inkLight }}>Pie chart = customer volume mix · Click DC to open workflow</div>
           </div>
-          <LeafletMap setPage={setPage} />
+          <LeafletMap navigate={navigate} />
         </div>
       </div>
 
@@ -66,7 +68,7 @@ export default function Landing({ setPage }) {
       {/* Footer */}
       <div style={{ borderTop: `1px solid ${T.border}`, padding: '16px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Logo compact />
-        <div style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkGhost, letterSpacing: 0.8 }}>DEMO · NOT OFFICIAL MARS PETCARE DATA</div>
+        <div style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkGhost, letterSpacing: 0.8 }}>SUPPLY CHAIN HUB · PLANNING PLATFORM</div>
         <div style={{ fontSize: 12, color: T.inkGhost }}>React · Claude API · Vercel</div>
       </div>
     </div>

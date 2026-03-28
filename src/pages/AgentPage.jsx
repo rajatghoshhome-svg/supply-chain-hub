@@ -1,12 +1,13 @@
+import { useNavigate } from 'react-router-dom';
 import { T } from '../styles/tokens';
 import AgentChat from '../components/AgentChat';
 
 const GROUPED = {
   Risk:      ["What's our biggest risk right now?", "What's total exposure if we do nothing today?"],
   Action:    ["What should I approve today and what can wait?", "Why consolidate onto one truck instead of two shipments?"],
-  Customers: ["Which retailer is most at risk?", "What's the Walmart fill rate situation?"],
-  Analysis:  ["Is Atlanta weather noise or a structural problem?"],
-  'Root cause': ["What parameters need updating this week?", "What's the LA Cesar Softies situation?"],
+  Customers: ["Which retailer is most at risk?", "What's the fill rate situation?"],
+  Analysis:  ["Where are the forecast gaps?", "Which DCs need attention?"],
+  Planning:  ["What parameters need updating?", "Where should we rebalance inventory?"],
 };
 
 const CONTEXT = [
@@ -16,7 +17,8 @@ const CONTEXT = [
   ['At-risk retailers','Walmart · PetSmart', T.risk],
 ];
 
-export default function AgentPage({ setPage }) {
+export default function AgentPage() {
+  const navigate = useNavigate();
   return (
     <div style={{ background: T.bg, height: 'calc(100vh - 54px)', display: 'flex', fontFamily: 'Inter' }}>
       {/* Sidebar */}
@@ -48,14 +50,14 @@ export default function AgentPage({ setPage }) {
       {/* Chat area */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ borderBottom: `1px solid ${T.border}`, padding: '11px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: T.white, flexShrink: 0 }}>
-          <div style={{ fontFamily: 'Sora', fontWeight: 500, fontSize: 14, color: T.ink }}>Supply Execution Agent</div>
+          <div style={{ fontFamily: 'Sora', fontWeight: 500, fontSize: 14, color: T.ink }}>Supply Chain Agent</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkLight }}>Claude Sonnet · 6 DCs · 4 SKUs · 4 retailers</div>
-            <button onClick={() => setPage('workflow')} style={{ background: 'none', border: `1px solid ${T.border}`, color: T.inkLight, padding: '5px 13px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontFamily: 'Inter' }}>Workflow</button>
+            <button onClick={() => navigate('/drp')} style={{ background: 'none', border: `1px solid ${T.border}`, color: T.inkLight, padding: '5px 13px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontFamily: 'Inter' }}>DRP</button>
           </div>
         </div>
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          <AgentChat />
+          <AgentChat moduleContext="general" />
         </div>
       </div>
     </div>

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { T } from '../styles/tokens';
 import { DCS, CC } from '../data/dcs';
 
-export default function LeafletMap({ setPage }) {
+export default function LeafletMap({ navigate }) {
   const mapRef = useRef(null);
   const mapInst = useRef(null);
   const [tip, setTip] = useState({ visible: false, x: 0, y: 0, dc: null });
@@ -68,7 +68,7 @@ export default function LeafletMap({ setPage }) {
         setTip({ visible: true, x: pt.x, y: pt.y, dc });
       });
       m.on('mouseout', () => setTip({ visible: false, x: 0, y: 0, dc: null }));
-      m.on('click', () => setPage('workflow'));
+      m.on('click', () => navigate && navigate('/drp'));
     });
 
     mapInst.current = map;

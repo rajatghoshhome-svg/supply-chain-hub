@@ -36,7 +36,7 @@ export default function About() {
         <div style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkLight, letterSpacing: 1.5, marginBottom: 13, textTransform: 'uppercase' }}>About this build</div>
         <h1 style={{ fontFamily: 'Sora', fontWeight: 500, fontSize: 30, color: T.ink, letterSpacing: -0.7, marginBottom: 14 }}>Built in 20 days.</h1>
         <p style={{ fontSize: 15, color: T.inkMid, lineHeight: 1.8, marginBottom: 7 }}>Working prototype. Architecture, data model, scoring engines, and agent reasoning are production-grade. Inventory and customer data are synthetic.</p>
-        <div style={{ display: 'inline-block', padding: '4px 10px', background: T.bgDark, border: `1px solid ${T.border}`, borderRadius: 5, fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkLight, letterSpacing: 0.5, marginBottom: 36 }}>Not official Mars Petcare data</div>
+        <div style={{ display: 'inline-block', padding: '4px 10px', background: T.bgDark, border: `1px solid ${T.border}`, borderRadius: 5, fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkLight, letterSpacing: 0.5, marginBottom: 36 }}>Supply Chain Hub · Planning Platform</div>
 
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9.5, color: T.inkLight, letterSpacing: 1.3, marginBottom: 11, textTransform: 'uppercase' }}>Demo stack</div>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { T } from '../styles/tokens';
 
 const SKUS = ['Dentastix Large', 'Greenies Medium', 'Dentastix Small', 'Cesar Softies'];
@@ -63,7 +64,8 @@ function scoreStyle(s) {
   return { bg: T.white, text: T.inkGhost, border: T.border };
 }
 
-export default function Workflow({ setPage }) {
+export default function Workflow() {
+  const navigate = useNavigate();
   const [sel, setSel] = useState(null);
   const [dismissed, setDismissed] = useState(new Set());
 
@@ -82,7 +84,7 @@ export default function Workflow({ setPage }) {
             <div style={{ width: 6, height: 6, borderRadius: '50%', background: T.risk, animation: 'blink 2.5s infinite' }} />
             <span style={{ fontFamily: 'JetBrains Mono', fontSize: 11, color: T.risk }}>2 actions required today</span>
           </div>
-          <button onClick={() => setPage('agent')} style={{ background: T.ink, color: T.white, border: 'none', padding: '7px 18px', borderRadius: 7, cursor: 'pointer', fontSize: 13, fontFamily: 'Sora', fontWeight: 500 }}>Ask the agent</button>
+          <button onClick={() => navigate('/agent')} style={{ background: T.ink, color: T.white, border: 'none', padding: '7px 18px', borderRadius: 7, cursor: 'pointer', fontSize: 13, fontFamily: 'Sora', fontWeight: 500 }}>Ask the agent</button>
         </div>
       </div>
 
@@ -128,7 +130,7 @@ export default function Workflow({ setPage }) {
               ))}
               {sel && (
                 <div style={{ marginLeft: 'auto', fontSize: 12, color: T.inkLight }}>
-                  <span style={{ color: T.ink, fontWeight: 500 }}>{sel.split('|')[0]}</span> · <span style={{ color: T.ink, fontWeight: 500 }}>{sel.split('|')[1]} DC</span> — <span style={{ color: T.accent, cursor: 'pointer', textDecoration: 'underline' }} onClick={() => setPage('agent')}>ask the agent</span>
+                  <span style={{ color: T.ink, fontWeight: 500 }}>{sel.split('|')[0]}</span> · <span style={{ color: T.ink, fontWeight: 500 }}>{sel.split('|')[1]} DC</span> — <span style={{ color: T.accent, cursor: 'pointer', textDecoration: 'underline' }} onClick={() => navigate('/agent')}>ask the agent</span>
                 </div>
               )}
             </div>
