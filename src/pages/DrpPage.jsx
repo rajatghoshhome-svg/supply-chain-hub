@@ -5,11 +5,14 @@ import PageHeader from '../components/shared/PageHeader';
 import Card from '../components/shared/Card';
 
 const TABS = [
-  { id: 'requirements', label: 'DRP Records' },
-  { id: 'plant', label: 'Plant Requirements' },
+  { id: 'requirements', label: 'Replenishment Plan' },
+  { id: 'plant', label: 'Plant Demand' },
   { id: 'network', label: 'Network' },
   { id: 'exceptions', label: 'Exceptions' },
 ];
+
+const FTL_THRESHOLD = 500;
+const LTL_THRESHOLD = 250;
 
 // ─── Static fallback data (used when API is unavailable, e.g. Vercel) ────
 const STATIC_DRP = {
@@ -92,12 +95,27 @@ const STATIC_DRP = {
   ],
 };
 
+function getFtlBadge(qty) {
+  if (qty >= FTL_THRESHOLD) return { label: 'FTL', bg: '#D1FAE5', color: '#059669', border: '#6EE7B7' };
+  if (qty >= LTL_THRESHOLD) return { label: 'LTL', bg: '#FEF3C7', color: '#D97706', border: '#FCD34D' };
+  return { label: 'Partial', bg: '#FEE2E2', color: '#DC2626', border: '#FCA5A5' };
+}
+
+function getOnHandColor(onHand, safetyStock) {
+  if (onHand > safetyStock) return T.safe;
+  if (onHand >= safetyStock * 0.8) return T.warn;
+  return T.risk;
+}
+
 export default function DrpPage() {
   const [tab, setTab] = useState('requirements');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedSku, setSelectedSku] = useState(null);
   const [selectedDC, setSelectedDC] = useState(null);
+  const [approvedShipments, setApprovedShipments] = useState({});
+  const [editingShipment, setEditingShipment] = useState(null);
+  const [shipmentEdits, setShipmentEdits] = useState({});
 
   useEffect(() => {
     fetch('/api/drp/demo')
@@ -126,20 +144,38 @@ export default function DrpPage() {
       });
   }, []);
 
+  // Load approved shipments from API
+  useEffect(() => {
+    fetch('/api/drp/approved-shipments')
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(d => setApprovedShipments(d.approved || {}))
+      .catch(() => {});
+  }, []);
+
+  const approveShipment = (skuCode, dc, period) => {
+    const key = `${skuCode}:${dc}:${period}`;
+    setApprovedShipments(prev => ({ ...prev, [key]: true }));
+    fetch('/api/drp/approve-shipment', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ skuCode, locationCode: dc, period }),
+    }).catch(() => {});
+  };
+
   const selectedResult = data?.results?.find(r => r.skuCode === selectedSku);
   const selectedDCResult = selectedResult?.dcResults?.find(dc => dc.locationCode === selectedDC);
   const allExceptions = data?.results?.flatMap(r => r.exceptions || []) || [];
 
   return (
     <ModuleLayout moduleContext="drp" tabs={TABS} activeTab={tab} onTabChange={setTab}>
-      <PageHeader title="Distribution Requirements Planning" subtitle="DRP" />
+      <PageHeader title="Distribution Replenishment Planning" subtitle="Replenishment" />
 
       <div className="module-content" style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
 
         {/* Status bar */}
         {data && (
           <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
-            <StatusPill label="SKUs" value={data.skusPlanned} />
+            <StatusPill label="Products" value={data.skusPlanned} />
             <StatusPill label="Locations" value={data.locationsPlanned} />
             <StatusPill label="Exceptions" value={data.totalExceptions} color={data.totalExceptions > 0 ? T.warn : T.safe} />
             <StatusPill label="Critical" value={data.criticalExceptions} color={data.criticalExceptions > 0 ? T.risk : T.safe} />
@@ -175,10 +211,10 @@ export default function DrpPage() {
           </div>
         )}
 
-        {/* ─── DRP Records Tab ────────────────────────────────────── */}
+        {/* ─── Replenishment Plan Tab ──────────────────────────────── */}
         {tab === 'requirements' && (
           <>
-            {/* DC selector */}
+            {/* Distribution Center selector */}
             {selectedResult && (
               <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
                 {selectedResult.dcResults?.map(dc => (
@@ -199,53 +235,219 @@ export default function DrpPage() {
               </div>
             )}
 
-            <Card title={`Time-Phased DRP Records — ${selectedSku} @ ${selectedDC || '...'}`}>
+            {/* DC Header with transit time, safety stock, on-hand */}
+            {selectedDCResult && (
+              <div style={{
+                display: 'flex', gap: 16, marginBottom: 16, padding: '12px 16px',
+                background: T.white, border: `1px solid ${T.border}`, borderRadius: 8,
+              }}>
+                <div>
+                  <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9, color: T.inkLight, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 3 }}>Distribution Center</div>
+                  <div style={{ fontFamily: 'Sora', fontSize: 16, fontWeight: 600, color: T.ink }}>{selectedDCResult.locationCode}</div>
+                </div>
+                <div>
+                  <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9, color: T.inkLight, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 3 }}>Transit Lead Time</div>
+                  <div style={{ fontFamily: 'Sora', fontSize: 16, fontWeight: 600, color: T.ink }}>{selectedDCResult.leadTime} week{selectedDCResult.leadTime !== 1 ? 's' : ''}</div>
+                </div>
+                <div>
+                  <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9, color: T.inkLight, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 3 }}>Safety Stock</div>
+                  <div style={{ fontFamily: 'Sora', fontSize: 16, fontWeight: 600, color: T.ink }}>{selectedDCResult.safetyStock}</div>
+                </div>
+                <div>
+                  <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9, color: T.inkLight, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 3 }}>Current On-Hand</div>
+                  <div style={{ fontFamily: 'Sora', fontSize: 16, fontWeight: 600, color: getOnHandColor(selectedDCResult.onHand, selectedDCResult.safetyStock) }}>{selectedDCResult.onHand}</div>
+                </div>
+              </div>
+            )}
+
+            {/* FTL summary */}
+            {selectedDCResult && (() => {
+              const shipments = selectedDCResult.records.filter(r => r.plannedShipment > 0);
+              const ftlCount = shipments.filter(r => r.plannedShipment >= FTL_THRESHOLD).length;
+              return shipments.length > 0 ? (
+                <div style={{
+                  marginBottom: 12, padding: '8px 14px', borderRadius: 6,
+                  background: ftlCount === shipments.length ? '#D1FAE5' : '#FEF3C7',
+                  border: `1px solid ${ftlCount === shipments.length ? '#6EE7B7' : '#FCD34D'}`,
+                  fontSize: 12, fontFamily: 'Inter', color: T.inkMid,
+                }}>
+                  <strong>{ftlCount}</strong> of <strong>{shipments.length}</strong> shipments are full truckloads
+                </div>
+              ) : null;
+            })()}
+
+            <Card title={`Replenishment Plan \u2014 ${selectedSku} @ ${selectedDC || '...'}`}>
               {loading ? (
-                <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>Running DRP netting...</div>
+                <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>Running replenishment netting...</div>
               ) : selectedDCResult ? (
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, fontFamily: 'JetBrains Mono' }}>
                     <thead>
                       <tr style={{ borderBottom: `2px solid ${T.border}` }}>
-                        {['Period', 'Gross Req', 'Sched Rcpt', 'Proj OH', 'Net Req', 'Pln Shipment', 'Pln Release'].map(h => (
-                          <th key={h} scope="col" style={{ textAlign: h === 'Period' ? 'left' : 'right', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
+                        {['Period', 'Demand Forecast', 'Scheduled Receipts', 'Projected On-Hand', 'Net Requirement', 'Planned Shipment', 'Load Type', 'Status', 'Planned Release'].map(h => (
+                          <th key={h} scope="col" style={{ textAlign: h === 'Period' || h === 'Load Type' || h === 'Status' ? 'left' : 'right', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedDCResult.records.map(r => (
-                        <tr key={r.period} style={{ borderBottom: `1px solid ${T.border}` }}>
-                          <td style={{ padding: '6px 10px', color: T.inkMid }}>{r.period}</td>
-                          <td style={{ padding: '6px 10px', textAlign: 'right' }}>{fmt(r.grossReq)}</td>
-                          <td style={{ padding: '6px 10px', textAlign: 'right', color: r.scheduledReceipts > 0 ? T.accent : T.inkGhost }}>{fmt(r.scheduledReceipts)}</td>
-                          <td style={{ padding: '6px 10px', textAlign: 'right', color: T.ink }}>{fmt(r.projectedOH)}</td>
-                          <td style={{ padding: '6px 10px', textAlign: 'right', color: r.netReq > 0 ? T.warn : T.inkGhost }}>{fmt(r.netReq)}</td>
-                          <td style={{ padding: '6px 10px', textAlign: 'right', color: r.plannedShipment > 0 ? T.safe : T.inkGhost }}>{fmt(r.plannedShipment)}</td>
-                          <td style={{ padding: '6px 10px', textAlign: 'right', color: r.plannedShipmentRelease > 0 ? T.accent : T.inkGhost, fontWeight: r.plannedShipmentRelease > 0 ? 600 : 400 }}>{fmt(r.plannedShipmentRelease)}</td>
-                        </tr>
-                      ))}
+                      {selectedDCResult.records.map(r => {
+                        const shipKey = `${selectedSku}:${selectedDC}:${r.period}`;
+                        const isApproved = approvedShipments[shipKey];
+                        const isEditingThis = editingShipment === shipKey;
+                        const editedQty = shipmentEdits[shipKey];
+                        const displayQty = editedQty != null ? editedQty : r.plannedShipment;
+                        const ftlBadge = displayQty > 0 ? getFtlBadge(displayQty) : null;
+                        return (
+                          <tr key={r.period} style={{ borderBottom: `1px solid ${T.border}` }}>
+                            <td style={{ padding: '6px 10px', color: T.inkMid }}>{r.period}</td>
+                            <td style={{ padding: '6px 10px', textAlign: 'right' }}>{fmt(r.grossReq)}</td>
+                            <td style={{ padding: '6px 10px', textAlign: 'right', color: r.scheduledReceipts > 0 ? T.accent : T.inkGhost }}>{fmt(r.scheduledReceipts)}</td>
+                            <td style={{ padding: '6px 10px', textAlign: 'right', color: T.ink }}>{fmt(r.projectedOH)}</td>
+                            <td style={{ padding: '6px 10px', textAlign: 'right', color: r.netReq > 0 ? T.warn : T.inkGhost }}>{fmt(r.netReq)}</td>
+                            <td style={{ padding: '4px 8px', textAlign: 'right' }}>
+                              {isEditingThis ? (
+                                <input
+                                  type="number"
+                                  defaultValue={displayQty}
+                                  autoFocus
+                                  onBlur={(e) => {
+                                    const val = parseInt(e.target.value, 10);
+                                    if (!isNaN(val) && val !== r.plannedShipment) {
+                                      setShipmentEdits(prev => ({ ...prev, [shipKey]: val }));
+                                    } else if (val === r.plannedShipment) {
+                                      setShipmentEdits(prev => { const n = { ...prev }; delete n[shipKey]; return n; });
+                                    }
+                                    setEditingShipment(null);
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') e.target.blur();
+                                    if (e.key === 'Escape') setEditingShipment(null);
+                                  }}
+                                  style={{
+                                    width: 70, textAlign: 'right', fontFamily: 'JetBrains Mono', fontSize: 11,
+                                    border: `1px solid ${T.accent}`, borderRadius: 4, padding: '3px 6px',
+                                    outline: 'none', background: T.white, color: T.ink,
+                                  }}
+                                />
+                              ) : (
+                                <span
+                                  onClick={() => displayQty > 0 ? setEditingShipment(shipKey) : null}
+                                  style={{
+                                    cursor: displayQty > 0 ? 'pointer' : 'default',
+                                    color: displayQty > 0 ? T.safe : T.inkGhost,
+                                    fontWeight: editedQty != null ? 600 : 400,
+                                    borderBottom: displayQty > 0 ? `1px dashed ${T.safe}` : 'none',
+                                  }}
+                                  title={displayQty > 0 ? 'Click to edit quantity' : ''}
+                                >
+                                  {fmt(displayQty)}
+                                </span>
+                              )}
+                            </td>
+                            <td style={{ padding: '6px 10px' }}>
+                              {ftlBadge && (
+                                <span style={{
+                                  display: 'inline-block', padding: '2px 6px', borderRadius: 3,
+                                  fontSize: 9, fontWeight: 600,
+                                  background: ftlBadge.bg, color: ftlBadge.color,
+                                  border: `1px solid ${ftlBadge.border}`,
+                                }}>
+                                  {ftlBadge.label}
+                                </span>
+                              )}
+                            </td>
+                            <td style={{ padding: '6px 10px' }}>
+                              {displayQty > 0 && (
+                                isApproved ? (
+                                  <span style={{ color: T.safe, fontSize: 10, fontWeight: 600 }}>{'\u2713'} Approved</span>
+                                ) : (
+                                  <button
+                                    onClick={() => approveShipment(selectedSku, selectedDC, r.period)}
+                                    style={{
+                                      background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 4,
+                                      padding: '2px 8px', fontSize: 9, color: T.inkLight, cursor: 'pointer',
+                                      fontFamily: 'JetBrains Mono', transition: 'all 0.12s',
+                                    }}
+                                  >
+                                    Approve
+                                  </button>
+                                )
+                              )}
+                            </td>
+                            <td style={{ padding: '6px 10px', textAlign: 'right', color: r.plannedShipmentRelease > 0 ? T.accent : T.inkGhost, fontWeight: r.plannedShipmentRelease > 0 ? 600 : 400 }}>{fmt(r.plannedShipmentRelease)}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
               ) : (
-                <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>Select a SKU and DC above</div>
+                <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>Select a product and Distribution Center above</div>
               )}
             </Card>
           </>
         )}
 
-        {/* ─── Plant Requirements Tab ─────────────────────────────── */}
+        {/* ─── Plant Demand Tab ──────────────────────────────────── */}
         {tab === 'plant' && (
           <>
-            <Card title={`Plant Gross Requirements — ${selectedSku}`}>
+            <Card title={`Plant Demand \u2014 ${selectedSku}`}>
               {loading ? (
                 <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>Loading...</div>
               ) : selectedResult?.plantRequirements ? (
                 <div style={{ padding: '16px 20px' }}>
                   <div style={{ marginBottom: 16, fontSize: 12, color: T.inkMid }}>
-                    Aggregated planned shipment releases from all DCs → plant-level gross requirements.
-                    This feeds into Production Planning.
+                    Aggregated planned shipment releases from all Distribution Centers feed into plant-level demand.
+                    This drives Production Planning.
                   </div>
+
+                  {/* Move vs Make analysis */}
+                  {selectedResult.dcResults && selectedResult.dcResults.length > 1 && (() => {
+                    const transferSuggestions = [];
+                    const dcList = selectedResult.dcResults;
+                    const periods = data?.periods || [];
+                    periods.forEach((period, i) => {
+                      // Find DCs with excess inventory (> 2x safety stock)
+                      const overStocked = dcList.filter(dc => {
+                        const rec = dc.records?.[i];
+                        return rec && rec.projectedOH > dc.safetyStock * 2;
+                      });
+                      // Find DCs that need stock this period
+                      const needStock = dcList.filter(dc => {
+                        const rec = dc.records?.[i];
+                        return rec && rec.netReq > 0;
+                      });
+                      overStocked.forEach(srcDc => {
+                        needStock.forEach(destDc => {
+                          if (srcDc.locationCode !== destDc.locationCode) {
+                            transferSuggestions.push({
+                              period,
+                              from: srcDc.locationCode,
+                              to: destDc.locationCode,
+                              fromOH: srcDc.records[i].projectedOH,
+                              fromSS: srcDc.safetyStock,
+                              toNeed: destDc.records[i].netReq,
+                            });
+                          }
+                        });
+                      });
+                    });
+                    return transferSuggestions.length > 0 ? (
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ fontFamily: 'Sora', fontSize: 12, fontWeight: 600, color: T.ink, marginBottom: 8 }}>Move vs Make Analysis</div>
+                        {transferSuggestions.map((s, idx) => (
+                          <div key={idx} style={{
+                            display: 'inline-block', marginRight: 8, marginBottom: 6,
+                            padding: '4px 10px', borderRadius: 4,
+                            background: '#DBEAFE', color: '#2563EB', border: '1px solid #93C5FD',
+                            fontSize: 10, fontFamily: 'JetBrains Mono',
+                          }}>
+                            {s.period}: Consider transfer from {s.from} (OH: {s.fromOH}, SS: {s.fromSS}) to {s.to} (needs {s.toNeed})
+                          </div>
+                        ))}
+                      </div>
+                    ) : null;
+                  })()}
 
                   {/* Aggregate bar chart */}
                   <div style={{ marginBottom: 24 }}>
@@ -323,13 +525,13 @@ export default function DrpPage() {
               ))}
             </div>
 
-            <Card title={`DRP Exceptions (${allExceptions.length} total)`}>
+            <Card title={`Replenishment Exceptions (${allExceptions.length} total)`}>
               {allExceptions.length > 0 ? (
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                     <thead>
                       <tr style={{ borderBottom: `2px solid ${T.border}` }}>
-                        {['Severity', 'SKU', 'Location', 'Type', 'Period', 'Qty', 'Message'].map(h => (
+                        {['Severity', 'Product', 'Location', 'Type', 'Period', 'Qty', 'Message'].map(h => (
                           <th key={h} scope="col" style={{ textAlign: 'left', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
                         ))}
                       </tr>

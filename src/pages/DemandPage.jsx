@@ -6,10 +6,29 @@ import Card from '../components/shared/Card';
 import ForecastChart from '../components/demand/ForecastChart';
 
 const TABS = [
-  { id: 'forecast', label: 'Forecast' },
+  { id: 'forecast', label: 'Statistical Forecast' },
   { id: 'history', label: 'Demand History' },
-  { id: 'accuracy', label: 'Accuracy' },
+  { id: 'accuracy', label: 'Forecast Accuracy' },
 ];
+
+const OVERRIDE_REASONS = [
+  'Promotion',
+  'New Distribution Point',
+  'Seasonal Adjustment',
+  'Customer Intelligence',
+  'Supply Constraint',
+  'Other',
+];
+
+const REASON_COLORS = {
+  'Promotion': { bg: '#EDE9FE', color: '#7C3AED', border: '#C4B5FD' },
+  'New Distribution Point': { bg: '#DBEAFE', color: '#2563EB', border: '#93C5FD' },
+  'Seasonal Adjustment': { bg: '#FEF3C7', color: '#D97706', border: '#FCD34D' },
+  'Customer Intelligence': { bg: '#D1FAE5', color: '#059669', border: '#6EE7B7' },
+  'Supply Constraint': { bg: '#FEE2E2', color: '#DC2626', border: '#FCA5A5' },
+  'Other': { bg: '#F3F4F6', color: '#6B7280', border: '#D1D5DB' },
+  'Manual': { bg: '#F3F4F6', color: '#6B7280', border: '#D1D5DB' },
+};
 
 const API = '/api/demand';
 
@@ -151,6 +170,7 @@ export default function DemandPage() {
   }, [selectedSku]);
 
   // Restore previously saved overrides when SKU changes
+  // Overrides shape: { [period]: { value: number, reason: string } }
   useEffect(() => {
     if (!selectedSku) return;
     fetch(`${API}/overrides/${selectedSku}`)
@@ -158,7 +178,16 @@ export default function DemandPage() {
       .then(saved => {
         const ov = saved?.overrides || saved;
         if (ov && typeof ov === 'object' && Object.keys(ov).length > 0) {
-          setOverrides(ov);
+          // Normalize: if old format (just numbers), wrap them
+          const normalized = {};
+          for (const [k, v] of Object.entries(ov)) {
+            if (typeof v === 'number') {
+              normalized[k] = { value: v, reason: 'Manual' };
+            } else {
+              normalized[k] = v;
+            }
+          }
+          setOverrides(normalized);
         } else {
           setOverrides({});
         }
@@ -172,7 +201,7 @@ export default function DemandPage() {
 
       <div className="module-content" style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
 
-        {/* SKU Selector */}
+        {/* Product Selector */}
         <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
           {(skus.length > 0 ? skus : [{ skuCode: 'GRN-BAR', skuName: 'Oat & Honey Granola Bar' }]).map(s => (
             <button
@@ -287,7 +316,7 @@ export default function DemandPage() {
                     method={demoData.bestMethod}
                   />
 
-                  {/* Editable forecast table — planner override */}
+                  {/* Forecast table view — planner override with reasons */}
                   <div style={{ marginTop: 16, overflowX: 'auto' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9, color: T.inkLight, letterSpacing: 1, textTransform: 'uppercase' }}>
@@ -305,7 +334,6 @@ export default function DemandPage() {
                               });
                               if (!res.ok) throw new Error('API unavailable');
                               const result = await res.json();
-                              // Connect to cascade SSE for real progress
                               if (result.cascade?.planRunId) {
                                 connectCascadeSSE(result.cascade.planRunId);
                               } else {
@@ -314,7 +342,6 @@ export default function DemandPage() {
                                 setCascadeStatus('complete');
                               }
                             } catch {
-                              // Fallback to simulated cascade when API unavailable
                               setCascadeActive(true);
                               setCascadeStepsDone(0);
                               setCascadeStatus('running');
@@ -336,81 +363,155 @@ export default function DemandPage() {
                             cursor: 'pointer', transition: 'all 0.15s',
                           }}
                         >
-                          {overrideSaved ? '✓ Saved — Cascading...' : `Save & Cascade (${Object.keys(overrides).length} override${Object.keys(overrides).length > 1 ? 's' : ''})`}
+                          {overrideSaved ? '\u2713 Published — Cascading...' : `Publish Forecast & Cascade (${Object.keys(overrides).length} override${Object.keys(overrides).length > 1 ? 's' : ''})`}
                         </button>
                       )}
                     </div>
+
+                    {/* Transposed forecast table: rows = metrics, columns = periods */}
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'JetBrains Mono' }}>
                       <thead>
-                        <tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                          <th scope="col" style={{ textAlign: 'left', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Period</th>
-                          <th scope="col" style={{ textAlign: 'right', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Statistical</th>
-                          <th scope="col" style={{ textAlign: 'right', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Override</th>
-                          <th scope="col" style={{ textAlign: 'right', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Final</th>
+                        <tr style={{ borderBottom: `2px solid ${T.border}` }}>
+                          <th scope="col" style={{ textAlign: 'left', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, minWidth: 140 }}></th>
+                          {demoData.forecast?.periods?.map(p => (
+                            <th key={p} scope="col" style={{ textAlign: 'right', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>{p}</th>
+                          ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {demoData.forecast?.periods?.map((p, i) => {
-                          const stat = demoData.forecast.demand[i];
-                          const override = overrides[p];
-                          const final_ = override != null ? override : stat;
-                          const isEditing = editingCell === p;
-                          const changed = override != null && override !== stat;
-                          return (
-                            <tr key={p} style={{ borderBottom: `1px solid ${T.border}`, background: changed ? `${T.accent}08` : 'transparent' }}>
-                              <td style={{ padding: '6px 12px', color: T.inkMid }}>{p}</td>
-                              <td style={{ padding: '6px 12px', textAlign: 'right', color: T.inkLight }}>{stat}</td>
-                              <td style={{ padding: '4px 8px', textAlign: 'right' }}>
+                        {/* Statistical Forecast row */}
+                        <tr style={{ borderBottom: `1px solid ${T.border}` }}>
+                          <td style={{ padding: '8px 12px', color: T.inkMid, fontWeight: 500, fontSize: 11 }}>Statistical Forecast</td>
+                          {demoData.forecast?.periods?.map((p, i) => (
+                            <td key={p} style={{ padding: '6px 10px', textAlign: 'right', color: T.inkLight }}>{demoData.forecast.demand[i]}</td>
+                          ))}
+                        </tr>
+
+                        {/* Planner Override row (editable) */}
+                        <tr style={{ borderBottom: `1px solid ${T.border}`, background: `${T.accent}04` }}>
+                          <td style={{ padding: '8px 12px', color: T.accent, fontWeight: 600, fontSize: 11 }}>Planner Override</td>
+                          {demoData.forecast?.periods?.map((p, i) => {
+                            const stat = demoData.forecast.demand[i];
+                            const ov = overrides[p];
+                            const hasOverride = ov != null;
+                            const overrideVal = hasOverride ? ov.value : null;
+                            const overrideReason = hasOverride ? ov.reason : null;
+                            const isEditing = editingCell === p;
+                            const reasonColors = overrideReason ? (REASON_COLORS[overrideReason] || REASON_COLORS['Other']) : null;
+                            return (
+                              <td key={p} style={{ padding: '4px 6px', textAlign: 'right', verticalAlign: 'top' }}>
                                 {isEditing ? (
-                                  <input
-                                    type="number"
-                                    defaultValue={override ?? stat}
-                                    autoFocus
-                                    onBlur={(e) => {
-                                      const val = parseInt(e.target.value, 10);
-                                      if (!isNaN(val) && val !== stat) {
-                                        setOverrides(prev => ({ ...prev, [p]: val }));
-                                      } else if (val === stat) {
-                                        setOverrides(prev => { const n = { ...prev }; delete n[p]; return n; });
-                                      }
-                                      setEditingCell(null);
-                                    }}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') e.target.blur();
-                                      if (e.key === 'Escape') setEditingCell(null);
-                                    }}
-                                    style={{
-                                      width: 70, textAlign: 'right', fontFamily: 'JetBrains Mono', fontSize: 12,
-                                      border: `1px solid ${T.accent}`, borderRadius: 4, padding: '3px 6px',
-                                      outline: 'none', background: T.white, color: T.ink,
-                                    }}
-                                  />
+                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                                    <input
+                                      type="number"
+                                      defaultValue={overrideVal ?? stat}
+                                      autoFocus
+                                      onBlur={(e) => {
+                                        const val = parseInt(e.target.value, 10);
+                                        if (!isNaN(val) && val !== stat) {
+                                          setOverrides(prev => ({
+                                            ...prev,
+                                            [p]: { value: val, reason: prev[p]?.reason || 'Other' },
+                                          }));
+                                        } else if (val === stat) {
+                                          setOverrides(prev => { const n = { ...prev }; delete n[p]; return n; });
+                                        }
+                                        setEditingCell(null);
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') e.target.blur();
+                                        if (e.key === 'Escape') setEditingCell(null);
+                                      }}
+                                      style={{
+                                        width: 70, textAlign: 'right', fontFamily: 'JetBrains Mono', fontSize: 12,
+                                        border: `1px solid ${T.accent}`, borderRadius: 4, padding: '3px 6px',
+                                        outline: 'none', background: T.white, color: T.ink,
+                                      }}
+                                    />
+                                    <select
+                                      value={ov?.reason || 'Other'}
+                                      onChange={(e) => {
+                                        setOverrides(prev => ({
+                                          ...prev,
+                                          [p]: { value: prev[p]?.value ?? stat, reason: e.target.value },
+                                        }));
+                                      }}
+                                      style={{
+                                        width: 100, fontFamily: 'JetBrains Mono', fontSize: 9,
+                                        border: `1px solid ${T.border}`, borderRadius: 3, padding: '2px 4px',
+                                        outline: 'none', background: T.white, color: T.inkMid, cursor: 'pointer',
+                                      }}
+                                    >
+                                      {OVERRIDE_REASONS.map(r => (
+                                        <option key={r} value={r}>{r}</option>
+                                      ))}
+                                    </select>
+                                  </div>
                                 ) : (
-                                  <div
-                                    onClick={() => setEditingCell(p)}
-                                    style={{
-                                      cursor: 'pointer', padding: '3px 6px', borderRadius: 4,
-                                      border: `1px dashed ${changed ? T.accent : T.border}`,
-                                      color: changed ? T.accent : T.inkGhost,
-                                      fontWeight: changed ? 600 : 400,
-                                      minWidth: 50, display: 'inline-block',
-                                    }}
-                                    title="Click to override"
-                                  >
-                                    {override ?? '—'}
+                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                                    <div
+                                      onClick={() => setEditingCell(p)}
+                                      style={{
+                                        cursor: 'pointer', padding: '3px 6px', borderRadius: 4,
+                                        border: `1px dashed ${hasOverride ? T.accent : T.border}`,
+                                        color: hasOverride ? T.accent : T.inkGhost,
+                                        fontWeight: hasOverride ? 600 : 400,
+                                        minWidth: 50, display: 'inline-block',
+                                      }}
+                                      title="Click to override"
+                                    >
+                                      {overrideVal != null ? overrideVal : '\u2014'}
+                                    </div>
+                                    {hasOverride && reasonColors && (
+                                      <span style={{
+                                        display: 'inline-block', padding: '1px 5px', borderRadius: 3,
+                                        fontSize: 8, fontWeight: 500, lineHeight: '14px',
+                                        background: reasonColors.bg, color: reasonColors.color,
+                                        border: `1px solid ${reasonColors.border}`,
+                                      }}>
+                                        {overrideReason}
+                                      </span>
+                                    )}
                                   </div>
                                 )}
                               </td>
-                              <td style={{ padding: '6px 12px', textAlign: 'right', color: changed ? T.accent : T.ink, fontWeight: 600 }}>{final_}</td>
-                            </tr>
-                          );
-                        })}
+                            );
+                          })}
+                        </tr>
+
+                        {/* Final Forecast row */}
+                        <tr style={{ borderBottom: `1px solid ${T.border}`, background: `${T.ink}06` }}>
+                          <td style={{ padding: '8px 12px', color: T.ink, fontWeight: 600, fontSize: 11 }}>Final Forecast</td>
+                          {demoData.forecast?.periods?.map((p, i) => {
+                            const stat = demoData.forecast.demand[i];
+                            const ov = overrides[p];
+                            const final_ = ov != null ? ov.value : stat;
+                            const changed = ov != null && ov.value !== stat;
+                            return (
+                              <td key={p} style={{ padding: '6px 10px', textAlign: 'right', color: changed ? T.accent : T.ink, fontWeight: 600 }}>{final_}</td>
+                            );
+                          })}
+                        </tr>
+
+                        {/* Prior Year Actual row */}
+                        <tr style={{ borderBottom: `1px solid ${T.border}` }}>
+                          <td style={{ padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 11 }}>Prior Year Actual</td>
+                          {demoData.forecast?.periods?.map((p, i) => {
+                            const priorIdx = demoData.history?.demand ? demoData.history.demand.length - demoData.forecast.periods.length + i : -1;
+                            const priorVal = priorIdx >= 0 && priorIdx < (demoData.history?.demand?.length || 0) ? demoData.history.demand[priorIdx] : null;
+                            return (
+                              <td key={p} style={{ padding: '6px 10px', textAlign: 'right', color: T.inkGhost, fontStyle: priorVal == null ? 'italic' : 'normal' }}>
+                                {priorVal != null ? priorVal : '\u2014'}
+                              </td>
+                            );
+                          })}
+                        </tr>
                       </tbody>
                     </table>
                   </div>
                 </div>
               ) : (
-                <div style={{ padding: 60, textAlign: 'center', color: T.inkLight }}>Select a SKU</div>
+                <div style={{ padding: 60, textAlign: 'center', color: T.inkLight }}>Select a Product</div>
               )}
             </Card>
 

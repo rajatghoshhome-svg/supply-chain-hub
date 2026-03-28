@@ -4,10 +4,10 @@ import Logo from './Logo';
 
 const NAV_ITEMS = [
   ['/demand', 'Demand'],
-  ['/production-plan', 'Production Plan'],
-  ['/drp', 'DRP'],
+  ['/production-plan', 'Production'],
+  ['/drp', 'Distribution'],
   ['/scheduling', 'Scheduling'],
-  ['/mrp', 'MRP'],
+  ['/mrp', 'Materials'],
   ['/decisions', 'Decisions'],
   ['/agent', 'Agent'],
 ];

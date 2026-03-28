@@ -6,8 +6,8 @@ import Card from '../components/shared/Card';
 
 const TABS = [
   { id: 'bom', label: 'Bill of Materials' },
-  { id: 'records', label: 'MRP Records' },
-  { id: 'exceptions', label: 'Exceptions' },
+  { id: 'records', label: 'Material Requirements' },
+  { id: 'exceptions', label: 'Action Messages' },
 ];
 
 const PLANTS = ['PLT-PDX', 'PLT-ATX', 'PLT-NSH'];
@@ -119,6 +119,7 @@ export default function MrpPage() {
   const [addingTo, setAddingTo] = useState(null); // parentCode
   const [newBomLine, setNewBomLine] = useState({ code: '', name: '', qtyPer: 1, scrapPct: 0 });
   const [bomSaving, setBomSaving] = useState(false);
+  const [requirementsView, setRequirementsView] = useState('summary'); // 'summary' or 'explosion'
 
   useEffect(() => {
     setLoading(true);
@@ -148,7 +149,7 @@ export default function MrpPage() {
       });
   }, [selectedPlant]);
 
-  // Fetch AI suggestions when switching to exceptions tab
+  // Fetch AI suggestions when switching to action messages tab
   useEffect(() => {
     if (tab !== 'exceptions' || !data?.results) return;
     const allExc = data.results.flatMap(r => r.exceptions);
@@ -279,7 +280,7 @@ export default function MrpPage() {
 
   return (
     <ModuleLayout moduleContext="mrp" tabs={TABS} activeTab={tab} onTabChange={setTab}>
-      <PageHeader title="Material Requirements Planning" subtitle="MRP" />
+      <PageHeader title="Material Planning" subtitle="Requirements & Bill of Materials" />
 
       <div className="module-content" style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
 
@@ -309,8 +310,8 @@ export default function MrpPage() {
         {/* Status bar */}
         {data && (
           <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
-            <StatusPill label="SKUs Planned" value={data.skusPlanned} />
-            <StatusPill label="Exceptions" value={data.totalExceptions} color={data.criticalExceptions > 0 ? T.risk : T.safe} />
+            <StatusPill label="Items Planned" value={data.skusPlanned} />
+            <StatusPill label="Action Messages" value={data.totalExceptions} color={data.criticalExceptions > 0 ? T.risk : T.safe} />
             <StatusPill label="Critical" value={data.criticalExceptions} color={data.criticalExceptions > 0 ? T.risk : T.safe} />
             {tab === 'bom' && bomData && (
               <StatusPill label="BOM Items" value={bomData.tree?.length || 0} />
@@ -365,6 +366,7 @@ export default function MrpPage() {
                     setNewBomLine={setNewBomLine}
                     onAddLine={addBomLine}
                     bomSaving={bomSaving}
+                    allPlants={PLANTS}
                   />
                 ))}
 
@@ -394,86 +396,133 @@ export default function MrpPage() {
           </Card>
         )}
 
-        {/* ─── Records Tab ─────────────────────────────────────── */}
+        {/* ─── Material Requirements Tab ─────────────────────── */}
         {tab === 'records' && (
           <>
-            {/* SKU selector */}
-            {data && (
-              <div style={{ display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap' }}>
-                {data.results?.map(r => (
-                  <button
-                    key={r.skuCode}
-                    onClick={() => setSelectedSku(r.skuCode)}
-                    style={{
-                      background: selectedSku === r.skuCode ? T.ink : T.white,
-                      color: selectedSku === r.skuCode ? T.white : T.ink,
-                      border: `1px solid ${selectedSku === r.skuCode ? T.ink : T.border}`,
-                      borderRadius: 6, padding: '4px 8px', cursor: 'pointer',
-                      fontFamily: 'JetBrains Mono', fontSize: 10, transition: 'all 0.12s',
-                    }}
-                  >
-                    {r.skuCode}
-                    {r.criticalExceptions > 0 && (
-                      <span style={{ marginLeft: 4, color: selectedSku === r.skuCode ? '#ff9999' : T.risk }}>
-                        ({r.criticalExceptions})
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
+            {/* Sub-view toggle */}
+            <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
+              {[
+                { id: 'summary', label: 'Requirements Summary' },
+                { id: 'explosion', label: 'Full Explosion' },
+              ].map(v => (
+                <button
+                  key={v.id}
+                  onClick={() => setRequirementsView(v.id)}
+                  style={{
+                    background: requirementsView === v.id ? T.ink : T.white,
+                    color: requirementsView === v.id ? T.white : T.ink,
+                    border: `1px solid ${requirementsView === v.id ? T.ink : T.border}`,
+                    borderRadius: 6, padding: '5px 12px', cursor: 'pointer',
+                    fontFamily: 'JetBrains Mono', fontSize: 10, transition: 'all 0.12s',
+                  }}
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Requirements Summary sub-view */}
+            {requirementsView === 'summary' && (
+              <>
+                {/* Item selector */}
+                {data && (
+                  <div style={{ display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap' }}>
+                    {data.results?.map(r => (
+                      <button
+                        key={r.skuCode}
+                        onClick={() => setSelectedSku(r.skuCode)}
+                        style={{
+                          background: selectedSku === r.skuCode ? T.ink : T.white,
+                          color: selectedSku === r.skuCode ? T.white : T.ink,
+                          border: `1px solid ${selectedSku === r.skuCode ? T.ink : T.border}`,
+                          borderRadius: 6, padding: '4px 8px', cursor: 'pointer',
+                          fontFamily: 'JetBrains Mono', fontSize: 10, transition: 'all 0.12s',
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                        }}
+                      >
+                        {r.skuCode}
+                        <span style={{
+                          fontSize: 8, opacity: 0.7, fontWeight: 400,
+                          padding: '0 4px', borderRadius: 2,
+                          background: selectedSku === r.skuCode ? 'rgba(255,255,255,0.15)' : T.bgDark,
+                        }}>
+                          {formatLotSizing(r.lotSizing)}
+                        </span>
+                        {r.criticalExceptions > 0 && (
+                          <span style={{ color: selectedSku === r.skuCode ? '#ff9999' : T.risk }}>
+                            ({r.criticalExceptions})
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <Card title={`Time-Phased Requirements — ${selectedSku || '...'}`}>
+                  {loading ? (
+                    <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>Running material explosion...</div>
+                  ) : selectedResult ? (
+                    <div style={{ overflowX: 'auto' }}>
+                      {/* Item info bar */}
+                      <div style={{ padding: '10px 16px', background: T.bgDark, borderBottom: `1px solid ${T.border}`, display: 'flex', gap: 20, fontSize: 11, alignItems: 'center' }}>
+                        <span><span style={{ color: T.inkLight }}>Name:</span> {selectedResult.skuName || selectedResult.skuCode}</span>
+                        <span><span style={{ color: T.inkLight }}>Level:</span> {selectedResult.level ?? '\u2014'}</span>
+                        <span><span style={{ color: T.inkLight }}>Lead Time:</span> {selectedResult.leadTime || '\u2014'} wk</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ color: T.inkLight }}>Lot Sizing:</span>
+                          <span style={{
+                            display: 'inline-block', padding: '1px 6px', borderRadius: 3,
+                            background: T.accent + '12', color: T.accent, fontSize: 9, fontWeight: 600,
+                            fontFamily: 'JetBrains Mono', border: `1px solid ${T.accent}33`,
+                          }}>{formatLotSizing(selectedResult.lotSizing)}</span>
+                        </span>
+                        <span><span style={{ color: T.inkLight }}>Safety Stock:</span> {selectedResult.safetyStock ?? '\u2014'}</span>
+                      </div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, fontFamily: 'JetBrains Mono' }}>
+                        <thead>
+                          <tr style={{ borderBottom: `2px solid ${T.border}` }}>
+                            {['Period', 'Total Need', 'On Order', 'Projected Avail', 'Net Need', 'Planned Receipt', 'Planned Release'].map(h => (
+                              <th key={h} scope="col" style={{ textAlign: h === 'Period' ? 'left' : 'right', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedResult.records.map(r => (
+                            <tr key={r.period} style={{ borderBottom: `1px solid ${T.border}` }}>
+                              <td style={{ padding: '6px 10px', color: T.inkMid }}>{r.period}</td>
+                              <td style={{ padding: '6px 10px', textAlign: 'right' }}>{fmt(r.grossReq)}</td>
+                              <td style={{ padding: '6px 10px', textAlign: 'right', color: r.scheduledReceipts > 0 ? T.accent : T.inkGhost }}>{fmt(r.scheduledReceipts)}</td>
+                              <td style={{ padding: '6px 10px', textAlign: 'right', color: r.projectedOH < 0 ? T.risk : T.ink, fontWeight: r.projectedOH < 0 ? 600 : 400 }}>{fmt(r.projectedOH)}</td>
+                              <td style={{ padding: '6px 10px', textAlign: 'right', color: r.netReq > 0 ? T.warn : T.inkGhost }}>{fmt(r.netReq)}</td>
+                              <td style={{ padding: '6px 10px', textAlign: 'right', color: r.plannedOrderReceipt > 0 ? T.safe : T.inkGhost }}>{fmt(r.plannedOrderReceipt)}</td>
+                              <td style={{ padding: '6px 10px', textAlign: 'right', color: r.plannedOrderRelease > 0 ? T.accent : T.inkGhost, fontWeight: r.plannedOrderRelease > 0 ? 600 : 400 }}>{fmt(r.plannedOrderRelease)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>Select an item above</div>
+                  )}
+                </Card>
+              </>
             )}
 
-            <Card title={`Time-Phased MRP Records — ${selectedSku || '...'}`}>
-              {loading ? (
-                <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>Running MRP explosion...</div>
-              ) : selectedResult ? (
-                <div style={{ overflowX: 'auto' }}>
-                  {/* SKU info bar */}
-                  <div style={{ padding: '10px 16px', background: T.bgDark, borderBottom: `1px solid ${T.border}`, display: 'flex', gap: 20, fontSize: 11 }}>
-                    <span><span style={{ color: T.inkLight }}>Name:</span> {selectedResult.skuName || selectedResult.skuCode}</span>
-                    <span><span style={{ color: T.inkLight }}>Level:</span> {selectedResult.level ?? '—'}</span>
-                    <span><span style={{ color: T.inkLight }}>Lead Time:</span> {selectedResult.leadTime || '—'} wk</span>
-                    <span><span style={{ color: T.inkLight }}>Lot Sizing:</span> {selectedResult.lotSizing || '—'}</span>
-                    <span><span style={{ color: T.inkLight }}>Safety Stock:</span> {selectedResult.safetyStock ?? '—'}</span>
-                  </div>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, fontFamily: 'JetBrains Mono' }}>
-                    <thead>
-                      <tr style={{ borderBottom: `2px solid ${T.border}` }}>
-                        {['Period', 'Gross Req', 'Sched Rcpt', 'Proj OH', 'Net Req', 'Pln Rcpt', 'Pln Release'].map(h => (
-                          <th key={h} scope="col" style={{ textAlign: h === 'Period' ? 'left' : 'right', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedResult.records.map(r => (
-                        <tr key={r.period} style={{ borderBottom: `1px solid ${T.border}` }}>
-                          <td style={{ padding: '6px 10px', color: T.inkMid }}>{r.period}</td>
-                          <td style={{ padding: '6px 10px', textAlign: 'right' }}>{fmt(r.grossReq)}</td>
-                          <td style={{ padding: '6px 10px', textAlign: 'right', color: r.scheduledReceipts > 0 ? T.accent : T.inkGhost }}>{fmt(r.scheduledReceipts)}</td>
-                          <td style={{ padding: '6px 10px', textAlign: 'right', color: r.projectedOH < 0 ? T.risk : T.ink, fontWeight: r.projectedOH < 0 ? 600 : 400 }}>{fmt(r.projectedOH)}</td>
-                          <td style={{ padding: '6px 10px', textAlign: 'right', color: r.netReq > 0 ? T.warn : T.inkGhost }}>{fmt(r.netReq)}</td>
-                          <td style={{ padding: '6px 10px', textAlign: 'right', color: r.plannedOrderReceipt > 0 ? T.safe : T.inkGhost }}>{fmt(r.plannedOrderReceipt)}</td>
-                          <td style={{ padding: '6px 10px', textAlign: 'right', color: r.plannedOrderRelease > 0 ? T.accent : T.inkGhost, fontWeight: r.plannedOrderRelease > 0 ? 600 : 400 }}>{fmt(r.plannedOrderRelease)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>Select a SKU above</div>
-              )}
-            </Card>
+            {/* Full Explosion View */}
+            {requirementsView === 'explosion' && (
+              <BomExplosionView bomData={bomData} mrpData={data} loading={loading} />
+            )}
           </>
         )}
 
-        {/* ─── Exceptions Tab ──────────────────────────────────── */}
+        {/* ─── Action Messages Tab ─────────────────────────────── */}
         {tab === 'exceptions' && (
           <>
             <div className="mrp-exceptions-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
               {[
                 { label: 'Expedite', count: expCounts.expedite, color: T.risk, desc: 'Need sooner than planned' },
                 { label: 'Reschedule In', count: expCounts['reschedule-in'], color: T.warn, desc: 'Move receipt earlier' },
-                { label: 'Reschedule Out', count: expCounts['reschedule-out'], color: T.safe, desc: 'Defer — demand reduced' },
+                { label: 'Reschedule Out', count: expCounts['reschedule-out'], color: T.safe, desc: 'Defer \u2014 demand reduced' },
                 { label: 'Cancel', count: expCounts.cancel, color: T.inkLight, desc: 'No longer needed' },
               ].map(e => (
                 <div key={e.label} style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 8, padding: '14px 16px', textAlign: 'center' }}>
@@ -484,13 +533,13 @@ export default function MrpPage() {
               ))}
             </div>
 
-            <Card title={`Exception Details (${allExceptions.length} total)`}>
+            <Card title={`Action Message Details (${allExceptions.length} total)`}>
               {allExceptions.length > 0 ? (
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                     <thead>
                       <tr style={{ borderBottom: `2px solid ${T.border}` }}>
-                        {['Severity', 'SKU', 'Type', 'Period', 'Qty', 'Message', 'AI Suggestion'].map(h => (
+                        {['Severity', 'Item', 'Type', 'Period', 'Qty', 'Message', 'AI Suggestion'].map(h => (
                           <th key={h} scope="col" style={{ textAlign: 'left', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
                         ))}
                       </tr>
@@ -510,8 +559,8 @@ export default function MrpPage() {
                           </td>
                           <td style={{ padding: '8px 10px', fontFamily: 'JetBrains Mono', fontSize: 11, fontWeight: 500 }}>{e.skuCode}</td>
                           <td style={{ padding: '8px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{e.type}</td>
-                          <td style={{ padding: '8px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{e.period || e.fromPeriod || '—'}</td>
-                          <td style={{ padding: '8px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{e.qty || '—'}</td>
+                          <td style={{ padding: '8px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{e.period || e.fromPeriod || '\u2014'}</td>
+                          <td style={{ padding: '8px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{e.qty || '\u2014'}</td>
                           <td style={{ padding: '8px 10px', fontSize: 12, color: T.inkMid }}>{e.message}</td>
                           <td style={{ padding: '8px 10px' }}>
                             {suggestions[i] && suggestions[i].confidence >= 30 && (
@@ -537,7 +586,7 @@ export default function MrpPage() {
                   </table>
                 </div>
               ) : (
-                <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>No exceptions — plan is clean.</div>
+                <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>No action messages \u2014 plan is clean.</div>
               )}
             </Card>
           </>
@@ -558,11 +607,105 @@ function StatusPill({ label, value, color }) {
   );
 }
 
+function formatLotSizing(ls) {
+  if (!ls) return '\u2014';
+  if (ls === 'L4L' || ls === 'lot-for-lot') return 'Lot-for-Lot';
+  if (ls === 'FOQ' || ls === 'fixed-order-qty') return 'Fixed Order Qty';
+  if (ls === 'EOQ' || ls === 'eoq') return 'EOQ';
+  if (ls === 'POQ' || ls === 'period-order-qty') return 'Period Order Qty';
+  return ls;
+}
+
 function fmt(v) {
-  if (v == null) return '—';
+  if (v == null) return '\u2014';
   const n = typeof v === 'number' ? v : parseFloat(v);
-  if (isNaN(n)) return '—';
+  if (isNaN(n)) return '\u2014';
   return Math.round(n * 100) / 100;
+}
+
+// ─── BOM Explosion View ───────────────────────────────────────────
+
+function BomExplosionView({ bomData, mrpData, loading }) {
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>Loading explosion...</div>;
+  if (!bomData?.tree || !mrpData?.results) return <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>No data available</div>;
+
+  // Build explosion rows from BOM tree and MRP data
+  const rows = [];
+  const mrpByCode = {};
+  (mrpData.results || []).forEach(r => { mrpByCode[r.skuCode] = r; });
+
+  bomData.tree.forEach(fg => {
+    const fgMrp = mrpByCode[fg.code];
+    const fgGross = fgMrp ? fgMrp.records.reduce((s, r) => s + (r.grossReq || 0), 0) : 0;
+    const fgNet = fgMrp ? fgMrp.records.reduce((s, r) => s + (r.netReq || 0), 0) : 0;
+    rows.push({ level: 0, code: fg.code, name: fg.name, qtyPer: '\u2014', scrapPct: '\u2014', gross: Math.round(fgGross), net: Math.round(fgNet) });
+
+    (fg.children || []).forEach(child => {
+      const scrap = child.scrapPct || 0;
+      const scrapFactor = scrap > 0 ? 1 / (1 - scrap / 100) : 1;
+      const childGross = Math.round(fgGross * (child.qtyPer || 0) * scrapFactor);
+      const childMrp = mrpByCode[child.code];
+      const childNet = childMrp ? childMrp.records.reduce((s, r) => s + (r.netReq || 0), 0) : childGross;
+      rows.push({ level: 1, code: child.code, name: child.name, qtyPer: child.qtyPer, scrapPct: scrap, gross: childGross, net: Math.round(childNet) });
+
+      (child.children || []).forEach(gc => {
+        const gcScrap = gc.scrapPct || 0;
+        const gcScrapFactor = gcScrap > 0 ? 1 / (1 - gcScrap / 100) : 1;
+        const gcGross = Math.round(childGross * (gc.qtyPer || 0) * gcScrapFactor);
+        const gcMrp = mrpByCode[gc.code];
+        const gcNet = gcMrp ? gcMrp.records.reduce((s, r) => s + (r.netReq || 0), 0) : gcGross;
+        rows.push({ level: 2, code: gc.code, name: gc.name, qtyPer: gc.qtyPer, scrapPct: gcScrap, gross: gcGross, net: Math.round(gcNet) });
+      });
+    });
+  });
+
+  return (
+    <Card title="Full BOM Explosion \u2014 Parent-Child Requirements">
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, fontFamily: 'JetBrains Mono' }}>
+          <thead>
+            <tr style={{ borderBottom: `2px solid ${T.border}` }}>
+              {['Level', 'Item', 'Description', 'Qty Per', 'Scrap %', 'Gross Requirement', 'Net Requirement'].map(h => (
+                <th key={h} scope="col" style={{
+                  textAlign: ['Qty Per', 'Scrap %', 'Gross Requirement', 'Net Requirement'].includes(h) ? 'right' : 'left',
+                  padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9,
+                  textTransform: 'uppercase', letterSpacing: 1,
+                }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => {
+              const levelCfg = LEVEL_COLORS[r.level] || LEVEL_COLORS[2];
+              return (
+                <tr key={`${r.code}-${i}`} style={{
+                  borderBottom: `1px solid ${T.border}`,
+                  background: r.level === 0 ? T.bgDark : 'transparent',
+                }}>
+                  <td style={{ padding: '6px 10px' }}>
+                    <span style={{
+                      display: 'inline-block', padding: '1px 6px', borderRadius: 3,
+                      background: levelCfg.bg, color: levelCfg.text,
+                      fontSize: 8, fontWeight: 600, fontFamily: 'JetBrains Mono',
+                      letterSpacing: 0.5, minWidth: 22, textAlign: 'center',
+                    }}>{r.level}</span>
+                  </td>
+                  <td style={{ padding: '6px 10px', paddingLeft: 10 + r.level * 20, fontWeight: r.level === 0 ? 600 : 400, color: T.ink }}>
+                    {r.code}
+                  </td>
+                  <td style={{ padding: '6px 10px', color: T.inkMid }}>{r.name}</td>
+                  <td style={{ padding: '6px 10px', textAlign: 'right', color: T.inkMid }}>{r.qtyPer}</td>
+                  <td style={{ padding: '6px 10px', textAlign: 'right', color: r.scrapPct > 0 ? T.warn : T.inkGhost }}>{r.scrapPct === '\u2014' ? '\u2014' : `${r.scrapPct}%`}</td>
+                  <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 500 }}>{r.gross.toLocaleString()}</td>
+                  <td style={{ padding: '6px 10px', textAlign: 'right', color: r.net > 0 ? T.warn : T.inkGhost, fontWeight: r.net > 0 ? 600 : 400 }}>{r.net.toLocaleString()}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
 }
 
 // ─── BOM Tree Node ────────────────────────────────────────────────
@@ -570,6 +713,7 @@ function fmt(v) {
 function BomNode({ node, depth, expanded, onToggle, selectedPlant, parentCode,
   editingBomLine, editBomValues, setEditBomValues, onStartEdit, onSaveEdit, onCancelEdit,
   onDelete, addingTo, setAddingTo, newBomLine, setNewBomLine, onAddLine, bomSaving,
+  allPlants,
 }) {
   const hasChildren = node.children && node.children.length > 0;
   const isExpanded = expanded.has(node.code);
@@ -679,15 +823,28 @@ function BomNode({ node, depth, expanded, onToggle, selectedPlant, parentCode,
             )}
           </span>
 
-          {/* Name */}
-          <span style={{ fontSize: 12, color: T.inkMid, flex: 1 }}>
+          {/* Name + Primary/Secondary badge for root nodes */}
+          <span style={{ fontSize: 12, color: T.inkMid, flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
             {node.name}
+            {depth === 0 && (
+              <>
+                <span style={{
+                  display: 'inline-block', padding: '1px 6px', borderRadius: 3,
+                  background: T.safeBg, color: T.safe, fontSize: 8, fontWeight: 600,
+                  fontFamily: 'JetBrains Mono', letterSpacing: 0.5,
+                  border: `1px solid ${T.safe}33`,
+                }}>Primary</span>
+                <span style={{
+                  fontSize: 9, color: T.inkLight, fontFamily: 'JetBrains Mono',
+                }}>Active at: {(allPlants || []).join(', ')}</span>
+              </>
+            )}
           </span>
 
           {/* Qty per (for children) */}
           {node.qtyPer != null && (
             <span style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkMid, minWidth: 50, textAlign: 'right' }}>
-              \u00D7{node.qtyPer}
+              {'\u00D7'}{node.qtyPer}
             </span>
           )}
 
@@ -775,6 +932,7 @@ function BomNode({ node, depth, expanded, onToggle, selectedPlant, parentCode,
               setNewBomLine={setNewBomLine}
               onAddLine={onAddLine}
               bomSaving={bomSaving}
+              allPlants={allPlants}
             />
           ))}
 

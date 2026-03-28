@@ -31,6 +31,33 @@ import {
 
 export const productionPlanRouter = Router();
 
+// In-memory store for locked periods
+const lockedPeriodsStore = [];
+
+productionPlanRouter.put('/lock-period', (req, res) => {
+  try {
+    const { plant, period, locked } = req.body;
+    if (!plant || !period || typeof locked !== 'boolean') {
+      return res.status(400).json({ error: 'Required: plant (string), period (string), locked (boolean)' });
+    }
+    const idx = lockedPeriodsStore.findIndex(lp => lp.plant === plant && lp.period === period);
+    if (idx >= 0) {
+      if (locked) { lockedPeriodsStore[idx].locked = true; } else { lockedPeriodsStore.splice(idx, 1); }
+    } else if (locked) {
+      lockedPeriodsStore.push({ plant, period, locked: true });
+    }
+    res.json({ status: 'ok', lockedPeriods: lockedPeriodsStore.filter(lp => lp.plant === plant) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+productionPlanRouter.get('/locked-periods', (req, res) => {
+  try {
+    const { plant } = req.query;
+    const result = plant ? lockedPeriodsStore.filter(lp => lp.plant === plant) : lockedPeriodsStore;
+    res.json({ lockedPeriods: result });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 /**
  * GET /api/production-plan/demo
  * Full cascade: DRP → S&OP → MPS per plant

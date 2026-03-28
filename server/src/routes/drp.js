@@ -27,6 +27,9 @@ import {
 
 export const drpRouter = Router();
 
+// ─── In-memory approved shipments store ──────────────────────────
+const approvedShipments = {};
+
 /**
  * GET /api/drp/demo
  * Run DRP across all 10 products × 3 DCs, aggregate to 3 plants
@@ -289,7 +292,33 @@ drpRouter.post('/run', (req, res) => {
   }
 });
 
-// ─── Helpers ────────────────────────────────────────────────────
+// ─── Shipment Approval ───────��──────────────────────────────────
+
+/**
+ * PUT /api/drp/approve-shipment — mark a planned shipment as approved
+ */
+drpRouter.put('/approve-shipment', (req, res) => {
+  try {
+    const { skuCode, locationCode, period } = req.body;
+    if (!skuCode || !locationCode || !period) {
+      return res.status(400).json({ error: 'Required: skuCode, locationCode, period' });
+    }
+    const key = `${skuCode}:${locationCode}:${period}`;
+    approvedShipments[key] = true;
+    res.json({ status: 'ok', key, approved: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/drp/approved-shipments — list all approved shipments
+ */
+drpRouter.get('/approved-shipments', (_req, res) => {
+  res.json({ approved: approvedShipments });
+});
+
+// ─── Helpers ───���────────────────────────────────────────────────
 
 function makePeriods(count) {
   const periods = [];

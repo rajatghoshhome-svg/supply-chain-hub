@@ -78,13 +78,17 @@ schedulingRouter.get('/demo', (req, res) => {
     const allOrders = [];
     let orderIdx = 1;
 
+    // Build work center lookup for this plant
+    const plantWCs = plantWorkCenters[selectedPlant] || [];
+    const mixingWCs = plantWCs.filter(wc => /mix|blend|roast|grind/i.test(wc.name));
+    const processingWCs = plantWCs.filter(wc => /bak|form|pasteur|fill/i.test(wc.name));
+
     for (const skuCode of plantProducts) {
       const grossReqs = plantGrossReqs[skuCode] || new Array(8).fill(0);
       const inv = plantInventory[selectedPlant]?.[skuCode] || { onHand: 0 };
       const prod = products.find(p => p.code === skuCode);
       const family = productFamilies.find(f => f.products.includes(skuCode));
 
-      // Use chase strategy for scheduling (produce exactly what's needed)
       const plan = runProductionPlan({
         periods,
         grossReqs,
@@ -94,14 +98,19 @@ schedulingRouter.get('/demo', (req, res) => {
 
       const production = plan.strategies.chase.production;
 
-      // Get processing time from work center data
-      const wcData = (plantWorkCenters[selectedPlant] || [])[1]; // Assembly line
-      const hrsPerUnit = wcData?.hoursPerUnit?.[family?.code] || 1.0;
+      // Assign work center based on product type
+      let assignedWC = processingWCs[0] || plantWCs[1] || plantWCs[0];
+      if (/MIX|NUT/i.test(skuCode)) {
+        assignedWC = mixingWCs[0] || assignedWC;
+      } else if (/BAR|CHP|CRK/i.test(skuCode)) {
+        assignedWC = processingWCs[0] || assignedWC;
+      } else if (/WAT|JCE|KMB|NRG|CLD/i.test(skuCode)) {
+        assignedWC = processingWCs[0] || mixingWCs[0] || assignedWC;
+      }
+      const hrsPerUnit = assignedWC?.hoursPerUnit?.[family?.code] || 1.0;
 
       for (let i = 0; i < periods.length; i++) {
         if (production[i] > 0) {
-          // Offset due date by +2 periods so orders have realistic lead time
-          // This yields ~30-40% late orders instead of nearly 100%
           const duePeriodIdx = Math.min(i + 2, periods.length - 1);
           allOrders.push({
             id: `PO-${String(orderIdx++).padStart(3, '0')}`,
@@ -110,7 +119,8 @@ schedulingRouter.get('/demo', (req, res) => {
             qty: production[i],
             processingTime: Math.round(production[i] * hrsPerUnit * 10) / 10,
             dueDate: periods[duePeriodIdx],
-            workCenter: wcData?.code || 'WC-ASSEMBLY',
+            workCenter: assignedWC?.code || 'WC-ASSEMBLY',
+            workCenterName: assignedWC?.name || 'Assembly',
             priority: 'normal',
           });
         }
@@ -127,10 +137,18 @@ schedulingRouter.get('/demo', (req, res) => {
       currentDate: '2026-04-07',
     });
 
+    // Include work center details in response
+    const workCenterList = plantWCs.map(wc => ({
+      code: wc.code,
+      name: wc.name,
+      capacityHoursPerWeek: wc.capacityHoursPerWeek,
+    }));
+
     res.json({
       periods,
       plant: selectedPlant,
       plantProducts,
+      workCenters: workCenterList,
       ...result,
     });
   } catch (err) {
@@ -182,6 +200,9 @@ schedulingRouter.post('/demo/analyze', async (req, res) => {
 
     const allOrders = [];
     let orderIdx = 1;
+    const analyzeWCs = plantWorkCenters[selectedPlant] || [];
+    const analyzeMixWCs = analyzeWCs.filter(wc => /mix|blend|roast|grind/i.test(wc.name));
+    const analyzeProcWCs = analyzeWCs.filter(wc => /bak|form|pasteur|fill/i.test(wc.name));
     for (const skuCode of plantProducts) {
       const grossReqs = plantGrossReqs[skuCode] || new Array(8).fill(0);
       const inv = plantInventory[selectedPlant]?.[skuCode] || { onHand: 0 };
@@ -189,15 +210,19 @@ schedulingRouter.post('/demo/analyze', async (req, res) => {
       const family = productFamilies.find(f => f.products.includes(skuCode));
       const plan = runProductionPlan({ periods, grossReqs, beginningInventory: inv.onHand, costPerUnit: prod?.unitCost || 100 });
       const production = plan.strategies.chase.production;
-      const wcData = (plantWorkCenters[selectedPlant] || [])[1];
-      const hrsPerUnit = wcData?.hoursPerUnit?.[family?.code] || 1.0;
+      let aWC = analyzeProcWCs[0] || analyzeWCs[1] || analyzeWCs[0];
+      if (/MIX|NUT/i.test(skuCode)) aWC = analyzeMixWCs[0] || aWC;
+      else if (/BAR|CHP|CRK/i.test(skuCode)) aWC = analyzeProcWCs[0] || aWC;
+      else if (/WAT|JCE|KMB|NRG|CLD/i.test(skuCode)) aWC = analyzeProcWCs[0] || analyzeMixWCs[0] || aWC;
+      const hrsPerUnit = aWC?.hoursPerUnit?.[family?.code] || 1.0;
       for (let i = 0; i < periods.length; i++) {
         if (production[i] > 0) {
           const duePeriodIdx = Math.min(i + 2, periods.length - 1);
           allOrders.push({
             id: `PO-${String(orderIdx++).padStart(3, '0')}`, skuCode, skuName: prod?.name,
             qty: production[i], processingTime: Math.round(production[i] * hrsPerUnit * 10) / 10,
-            dueDate: periods[duePeriodIdx], workCenter: wcData?.code || 'WC-ASSEMBLY', priority: 'normal',
+            dueDate: periods[duePeriodIdx], workCenter: aWC?.code || 'WC-ASSEMBLY',
+            workCenterName: aWC?.name || 'Assembly', priority: 'normal',
           });
         }
       }
@@ -326,15 +351,22 @@ schedulingRouter.put('/resequence', (req, res) => {
         const family = productFamilies.find(f => f.products.includes(skuCode));
         const plan = runProductionPlan({ periods, grossReqs, beginningInventory: inv.onHand, costPerUnit: prod?.unitCost || 100 });
         const production = plan.strategies.chase.production;
-        const wcData = (plantWorkCenters[plant] || [])[1];
-        const hrsPerUnit = wcData?.hoursPerUnit?.[family?.code] || 1.0;
+        const rWCs = plantWorkCenters[plant] || [];
+        const rMixWCs = rWCs.filter(wc => /mix|blend|roast|grind/i.test(wc.name));
+        const rProcWCs = rWCs.filter(wc => /bak|form|pasteur|fill/i.test(wc.name));
+        let rWC = rProcWCs[0] || rWCs[1] || rWCs[0];
+        if (/MIX|NUT/i.test(skuCode)) rWC = rMixWCs[0] || rWC;
+        else if (/BAR|CHP|CRK/i.test(skuCode)) rWC = rProcWCs[0] || rWC;
+        else if (/WAT|JCE|KMB|NRG|CLD/i.test(skuCode)) rWC = rProcWCs[0] || rMixWCs[0] || rWC;
+        const hrsPerUnit = rWC?.hoursPerUnit?.[family?.code] || 1.0;
         for (let i = 0; i < periods.length; i++) {
           if (production[i] > 0) {
             const duePeriodIdx = Math.min(i + 2, periods.length - 1);
             allOrders.push({
               id: `PO-${String(orderIdx++).padStart(3, '0')}`, skuCode, skuName: prod?.name,
               qty: production[i], processingTime: Math.round(production[i] * hrsPerUnit * 10) / 10,
-              dueDate: periods[duePeriodIdx], workCenter: wcData?.code || 'WC-ASSEMBLY', priority: 'normal',
+              dueDate: periods[duePeriodIdx], workCenter: rWC?.code || 'WC-ASSEMBLY',
+              workCenterName: rWC?.name || 'Assembly', priority: 'normal',
             });
           }
         }

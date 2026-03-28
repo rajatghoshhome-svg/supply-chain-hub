@@ -267,14 +267,27 @@ demandRouter.post('/demo/:skuCode/analyze', async (req, res, next) => {
 demandRouter.put('/override', async (req, res, next) => {
   try {
     const { skuCode, overrides } = req.body;
-    // overrides is { "2026-04-07": 550, "2026-04-14": 600 }
+    // New shape: { "2026-04-07": { value: 550, reason: "Promotion" } }
+    // Backward compatible: { "2026-04-07": 550 } wraps to { value: 550, reason: "Manual" }
     if (!skuCode || !overrides || Object.keys(overrides).length === 0) {
       throw new ValidationError('skuCode and overrides object required');
     }
 
+    // Normalize overrides: wrap plain numbers for backward compatibility
+    const normalized = {};
+    for (const [period, val] of Object.entries(overrides)) {
+      if (typeof val === 'number') {
+        normalized[period] = { value: val, reason: 'Manual' };
+      } else if (val && typeof val === 'object' && val.value != null) {
+        normalized[period] = { value: val.value, reason: val.reason || 'Manual' };
+      } else {
+        normalized[period] = { value: Number(val), reason: 'Manual' };
+      }
+    }
+
     // Store overrides in memory (keyed by skuCode)
     if (!demandOverrides[skuCode]) demandOverrides[skuCode] = {};
-    Object.assign(demandOverrides[skuCode], overrides);
+    Object.assign(demandOverrides[skuCode], normalized);
 
     // Trigger cascade with the override values
     const cascadeResult = await triggerFullCascade({
