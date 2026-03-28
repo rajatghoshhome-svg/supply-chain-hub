@@ -4,6 +4,7 @@ import ModuleLayout from '../components/shared/ModuleLayout';
 import PageHeader from '../components/shared/PageHeader';
 import Card from '../components/shared/Card';
 import ForecastChart from '../components/demand/ForecastChart';
+import TrustScore from '../components/TrustScore';
 
 const TABS = [
   { id: 'forecast', label: 'Statistical Forecast' },
@@ -197,7 +198,9 @@ export default function DemandPage() {
 
   return (
     <ModuleLayout moduleContext="demand" tabs={TABS} activeTab={tab} onTabChange={setTab}>
-      <PageHeader title="Demand Planning" subtitle="Forecast & Analyze" />
+      <PageHeader title="Demand Planning" subtitle="Forecast & Analyze">
+        <TrustScore module="demand" compact />
+      </PageHeader>
 
       <div className="module-content" style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
 

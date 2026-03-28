@@ -3,6 +3,7 @@ import { T } from '../styles/tokens';
 import ModuleLayout from '../components/shared/ModuleLayout';
 import PageHeader from '../components/shared/PageHeader';
 import Card from '../components/shared/Card';
+import TrustScore from '../components/TrustScore';
 
 const TABS = [
   { id: 'psi', label: 'Production Plan' },
@@ -194,7 +195,9 @@ export default function ProductionPlanPage() {
 
   return (
     <ModuleLayout moduleContext="production_plan" tabs={TABS} activeTab={tab} onTabChange={setTab}>
-      <PageHeader title="Production Planning" subtitle="Aggregate & Capacity" />
+      <PageHeader title="Production Planning" subtitle="Aggregate & Capacity">
+        <TrustScore module="production" compact />
+      </PageHeader>
 
       <div className="module-content" style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
 

@@ -3,6 +3,7 @@ import { T } from '../styles/tokens';
 import ModuleLayout from '../components/shared/ModuleLayout';
 import PageHeader from '../components/shared/PageHeader';
 import Card from '../components/shared/Card';
+import TrustScore from '../components/TrustScore';
 
 const TABS = [
   { id: 'gantt', label: 'Schedule' },
@@ -96,7 +97,9 @@ export default function SchedulingPage() {
 
   return (
     <ModuleLayout moduleContext="scheduling" tabs={TABS} activeTab={tab} onTabChange={setTab}>
-      <PageHeader title="Production Scheduling" subtitle="Detailed Schedule" />
+      <PageHeader title="Production Scheduling" subtitle="Detailed Schedule">
+        <TrustScore module="scheduling" compact />
+      </PageHeader>
       <div className="module-content" style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
         {/* Plant + Rule selector + stats */}
         <div style={{ display: 'flex', gap: 12, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>

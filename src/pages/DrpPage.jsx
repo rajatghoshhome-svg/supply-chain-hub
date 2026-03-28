@@ -3,6 +3,7 @@ import { T } from '../styles/tokens';
 import ModuleLayout from '../components/shared/ModuleLayout';
 import PageHeader from '../components/shared/PageHeader';
 import Card from '../components/shared/Card';
+import TrustScore from '../components/TrustScore';
 
 const TABS = [
   { id: 'requirements', label: 'Replenishment Plan' },
@@ -246,7 +247,9 @@ export default function DrpPage() {
 
   return (
     <ModuleLayout moduleContext="drp" tabs={TABS} activeTab={tab} onTabChange={setTab}>
-      <PageHeader title="Distribution Replenishment Planning" subtitle="Replenishment" />
+      <PageHeader title="Distribution Replenishment Planning" subtitle="Replenishment">
+        <TrustScore module="drp" compact />
+      </PageHeader>
 
       <div className="module-content" style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
 

@@ -3,6 +3,7 @@ import { T } from '../styles/tokens';
 import ModuleLayout from '../components/shared/ModuleLayout';
 import PageHeader from '../components/shared/PageHeader';
 import Card from '../components/shared/Card';
+import TrustScore from '../components/TrustScore';
 
 const TABS = [
   { id: 'bom', label: 'Bill of Materials' },
@@ -313,7 +314,9 @@ export default function MrpPage() {
 
   return (
     <ModuleLayout moduleContext="mrp" tabs={TABS} activeTab={tab} onTabChange={setTab}>
-      <PageHeader title="Material Planning" subtitle="Requirements & Bill of Materials" />
+      <PageHeader title="Material Planning" subtitle="Requirements & Bill of Materials">
+        <TrustScore module="mrp" compact />
+      </PageHeader>
 
       <div className="module-content" style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
 

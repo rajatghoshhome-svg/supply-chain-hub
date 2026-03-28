@@ -34,6 +34,10 @@ import {
 
 export const schedulingRouter = Router();
 
+// In-memory store for persisted resequenced orders (keyed by plant)
+const savedSequences = {};
+
+
 /**
  * GET /api/scheduling/demo
  * Full cascade: DRP → MPS → Scheduling (per plant)
@@ -147,7 +151,7 @@ schedulingRouter.get('/demo', (req, res) => {
     }
 
     // Step 3: Schedule
-    const result = runScheduler({
+    let result = runScheduler({
       orders: allOrders,
       rule,
       capacityHoursPerDay: 8,
@@ -155,6 +159,34 @@ schedulingRouter.get('/demo', (req, res) => {
       compareRules: true,
       currentDate: '2026-04-07',
     });
+
+    // Apply saved resequence if one exists for this plant
+    if (savedSequences[selectedPlant] && rule === 'EDD') {
+      const savedIds = savedSequences[selectedPlant];
+      const reordered = [];
+      for (const id of savedIds) {
+        const order = result.schedule.find(o => o.id === id);
+        if (order) reordered.push(order);
+      }
+      // Add any new orders not in the saved sequence
+      for (const order of result.schedule) {
+        if (!savedIds.includes(order.id)) reordered.push(order);
+      }
+      if (reordered.length > 0) {
+        const rescheduled = forwardSchedule({
+          orders: reordered,
+          capacityHoursPerDay: 8,
+          changeoverTime: 1,
+        });
+        result = {
+          ...result,
+          schedule: rescheduled,
+          makespan: calculateMakespan(rescheduled),
+          lateOrders: rescheduled.filter(o => o.late).length,
+          rule: 'MANUAL',
+        };
+      }
+    }
 
     // Include work center details in response
     const workCenterList = plantWCs.map(wc => ({
@@ -429,6 +461,9 @@ schedulingRouter.put('/resequence', (req, res) => {
 
     const makespan = calculateMakespan(schedule);
     const lateOrders = schedule.filter(o => o.late).length;
+
+    // Persist the resequenced order IDs for this plant
+    savedSequences[plant] = orderIds;
 
     res.json({
       status: 'ok',
