@@ -392,21 +392,23 @@ cascadeRouter.get('/scenarios', (req, res) => {
 // POST /api/cascade/scenarios/save — save a labeled scenario
 cascadeRouter.post('/scenarios/save', (req, res) => {
   try {
-    const { demandMultiplier = 1.0, label = 'Scenario' } = req.body || {};
+    const { demandMultiplier = 1.0, label = 'Scenario', scenarios: comparisonResults } = req.body || {};
     const results = runScenario(demandMultiplier);
     const financialImpact = calculateFinancialImpact(results);
     const scenario = {
       id: Date.now(),
       label,
+      demandMultiplier,
       multiplier: demandMultiplier,
       savedAt: new Date().toISOString(),
-      ...results,
       financialImpact,
+      // Store the full comparison results array so we can restore the table
+      scenarios: comparisonResults || null,
     };
     savedScenarios.push(scenario);
     // Keep only the last 50 to avoid unbounded growth
     if (savedScenarios.length > 50) savedScenarios.splice(0, savedScenarios.length - 50);
-    res.json({ status: 'ok', scenario });
+    res.json(scenario);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
