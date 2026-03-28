@@ -67,6 +67,11 @@ export default function DemandPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Planner overrides for demand forecast
+  const [overrides, setOverrides] = useState({});
+  const [editingCell, setEditingCell] = useState(null);
+  const [overrideSaved, setOverrideSaved] = useState(false);
+
   // Cascade state
   const [cascadeActive, setCascadeActive] = useState(false);
   const [cascadeStepsDone, setCascadeStepsDone] = useState(0);
@@ -266,22 +271,106 @@ export default function DemandPage() {
                     method={demoData.bestMethod}
                   />
 
-                  {/* Forecast values table */}
+                  {/* Editable forecast table — planner override */}
                   <div style={{ marginTop: 16, overflowX: 'auto' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9, color: T.inkLight, letterSpacing: 1, textTransform: 'uppercase' }}>
+                        Consensus Forecast
+                      </div>
+                      {Object.keys(overrides).length > 0 && (
+                        <button
+                          onClick={() => {
+                            setOverrideSaved(true);
+                            setCascadeActive(true);
+                            setCascadeStepsDone(0);
+                            setCascadeStatus('running');
+                            // Simulate cascade progression
+                            let step = 0;
+                            const tick = setInterval(() => {
+                              step++;
+                              setCascadeStepsDone(step);
+                              if (step >= CASCADE_STEPS.length) {
+                                clearInterval(tick);
+                                setCascadeStatus('complete');
+                              }
+                            }, 600);
+                            setTimeout(() => setOverrideSaved(false), 3000);
+                          }}
+                          style={{
+                            background: T.accent, color: T.white, border: 'none', borderRadius: 6,
+                            padding: '6px 16px', fontSize: 11, fontWeight: 600, fontFamily: 'Inter',
+                            cursor: 'pointer', transition: 'all 0.15s',
+                          }}
+                        >
+                          {overrideSaved ? '✓ Saved — Cascading...' : `Save & Cascade (${Object.keys(overrides).length} override${Object.keys(overrides).length > 1 ? 's' : ''})`}
+                        </button>
+                      )}
+                    </div>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'JetBrains Mono' }}>
                       <thead>
                         <tr style={{ borderBottom: `1px solid ${T.border}` }}>
                           <th scope="col" style={{ textAlign: 'left', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Period</th>
-                          <th scope="col" style={{ textAlign: 'right', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Forecast</th>
+                          <th scope="col" style={{ textAlign: 'right', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Statistical</th>
+                          <th scope="col" style={{ textAlign: 'right', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Override</th>
+                          <th scope="col" style={{ textAlign: 'right', padding: '8px 12px', color: T.inkLight, fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Final</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {demoData.forecast?.periods?.map((p, i) => (
-                          <tr key={p} style={{ borderBottom: `1px solid ${T.border}` }}>
-                            <td style={{ padding: '6px 12px', color: T.inkMid }}>{p}</td>
-                            <td style={{ padding: '6px 12px', textAlign: 'right', color: T.accent, fontWeight: 500 }}>{demoData.forecast.demand[i]}</td>
-                          </tr>
-                        ))}
+                        {demoData.forecast?.periods?.map((p, i) => {
+                          const stat = demoData.forecast.demand[i];
+                          const override = overrides[p];
+                          const final_ = override != null ? override : stat;
+                          const isEditing = editingCell === p;
+                          const changed = override != null && override !== stat;
+                          return (
+                            <tr key={p} style={{ borderBottom: `1px solid ${T.border}`, background: changed ? `${T.accent}08` : 'transparent' }}>
+                              <td style={{ padding: '6px 12px', color: T.inkMid }}>{p}</td>
+                              <td style={{ padding: '6px 12px', textAlign: 'right', color: T.inkLight }}>{stat}</td>
+                              <td style={{ padding: '4px 8px', textAlign: 'right' }}>
+                                {isEditing ? (
+                                  <input
+                                    type="number"
+                                    defaultValue={override ?? stat}
+                                    autoFocus
+                                    onBlur={(e) => {
+                                      const val = parseInt(e.target.value, 10);
+                                      if (!isNaN(val) && val !== stat) {
+                                        setOverrides(prev => ({ ...prev, [p]: val }));
+                                      } else if (val === stat) {
+                                        setOverrides(prev => { const n = { ...prev }; delete n[p]; return n; });
+                                      }
+                                      setEditingCell(null);
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') e.target.blur();
+                                      if (e.key === 'Escape') setEditingCell(null);
+                                    }}
+                                    style={{
+                                      width: 70, textAlign: 'right', fontFamily: 'JetBrains Mono', fontSize: 12,
+                                      border: `1px solid ${T.accent}`, borderRadius: 4, padding: '3px 6px',
+                                      outline: 'none', background: T.white, color: T.ink,
+                                    }}
+                                  />
+                                ) : (
+                                  <div
+                                    onClick={() => setEditingCell(p)}
+                                    style={{
+                                      cursor: 'pointer', padding: '3px 6px', borderRadius: 4,
+                                      border: `1px dashed ${changed ? T.accent : T.border}`,
+                                      color: changed ? T.accent : T.inkGhost,
+                                      fontWeight: changed ? 600 : 400,
+                                      minWidth: 50, display: 'inline-block',
+                                    }}
+                                    title="Click to override"
+                                  >
+                                    {override ?? '—'}
+                                  </div>
+                                )}
+                              </td>
+                              <td style={{ padding: '6px 12px', textAlign: 'right', color: changed ? T.accent : T.ink, fontWeight: 600 }}>{final_}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

@@ -5,7 +5,7 @@ import PageHeader from '../components/shared/PageHeader';
 import Card from '../components/shared/Card';
 
 const TABS = [
-  { id: 'aggregate', label: 'Aggregate Plan' },
+  { id: 'psi', label: 'PSI View' },
   { id: 'capacity', label: 'Capacity (RCCP)' },
   { id: 'strategy', label: 'Strategy Comparison' },
 ];
@@ -91,8 +91,11 @@ const STATIC_PROD_PLAN = {
   ],
 };
 
+// Beginning inventory by SKU (units on hand at start of planning horizon)
+const BEGINNING_INVENTORY = { 'GRN-BAR': 450, 'PRO-BAR': 280, 'TRL-MIX': 310 };
+
 export default function ProductionPlanPage() {
-  const [tab, setTab] = useState('aggregate');
+  const [tab, setTab] = useState('psi');
   const [rawData, setRawData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedPlant, setSelectedPlant] = useState(null);
@@ -301,22 +304,108 @@ export default function ProductionPlanPage() {
           </>
         )}
 
-        {/* ─── Aggregate Plan Tab ──────────────────────────────── */}
-        {tab === 'aggregate' && (
-          <Card title={`Aggregate Plan — ${selectedSku || '...'} (${selectedStrategy})`}>
+        {/* ─── PSI (Production / Sales / Inventory) View ────────── */}
+        {tab === 'psi' && (
+          <>
             {strategy ? (
-              <div style={{ padding: '16px 20px' }}>
-                <ProdChart
-                  periods={rawData?.periods}
-                  demand={selectedResult?.plantGrossReqs}
-                  production={strategy.production}
-                  inventory={strategy.endingInventory}
-                />
-              </div>
+              <>
+                {/* PSI Chart — grouped bars + inventory line */}
+                <Card title={`PSI View — ${selectedSku || '...'} (${selectedStrategy})`}>
+                  <div style={{ padding: '16px 20px' }}>
+                    <PSIChart
+                      periods={rawData?.periods}
+                      demand={selectedResult?.plantGrossReqs}
+                      production={strategy.production}
+                      beginningInventory={BEGINNING_INVENTORY[selectedSku] || 0}
+                      endingInventory={strategy.endingInventory}
+                    />
+                  </div>
+                </Card>
+
+                {/* PSI Table */}
+                <Card title="Production, Sales & Inventory" style={{ marginTop: 16 }}>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'JetBrains Mono' }}>
+                      <thead>
+                        <tr style={{ borderBottom: `2px solid ${T.border}` }}>
+                          <th scope="col" style={thStyle('left')}>Period</th>
+                          <th scope="col" style={thStyle('right')}>Begin Inv</th>
+                          <th scope="col" style={thStyle('right')}>Production</th>
+                          <th scope="col" style={thStyle('right')}>Sales (Demand)</th>
+                          <th scope="col" style={thStyle('right')}>End Inv</th>
+                          <th scope="col" style={thStyle('right')}>Workforce</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rawData?.periods.map((p, i) => {
+                          const bi = i === 0 ? (BEGINNING_INVENTORY[selectedSku] || 0) : strategy.endingInventory[i - 1];
+                          const ei = strategy.endingInventory[i];
+                          return (
+                            <tr key={p} style={{ borderBottom: `1px solid ${T.border}` }}>
+                              <td style={tdStyle()}>{p}</td>
+                              <td style={tdStyle('right')}>{bi}</td>
+                              <td style={{ ...tdStyle('right'), color: T.accent, fontWeight: 500 }}>{strategy.production[i]}</td>
+                              <td style={tdStyle('right')}>{selectedResult.plantGrossReqs[i]}</td>
+                              <td style={{ ...tdStyle('right'), color: ei < 0 ? T.risk : ei < 50 ? T.warn : T.ink, fontWeight: ei < 0 ? 600 : 400 }}>{ei}</td>
+                              <td style={tdStyle('right')}>{strategy.workforce?.[i] ?? '—'}</td>
+                            </tr>
+                          );
+                        })}
+                        {/* Totals row */}
+                        <tr style={{ borderTop: `2px solid ${T.ink}`, fontWeight: 600 }}>
+                          <td style={tdStyle()}>Total</td>
+                          <td style={tdStyle('right')}></td>
+                          <td style={{ ...tdStyle('right'), color: T.accent }}>{strategy.production.reduce((s, v) => s + v, 0).toLocaleString()}</td>
+                          <td style={tdStyle('right')}>{selectedResult.plantGrossReqs.reduce((s, v) => s + v, 0).toLocaleString()}</td>
+                          <td style={tdStyle('right')}></td>
+                          <td style={tdStyle('right')}></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+
+                {/* Strategy Summary Cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 16 }}>
+                  {['chase', 'level', 'hybrid'].map(s => {
+                    const st = plan?.strategies?.[s];
+                    if (!st) return null;
+                    const avgInv = Math.round(st.endingInventory.reduce((a, v) => a + v, 0) / st.endingInventory.length);
+                    const maxWf = st.workforce ? Math.max(...st.workforce) : '—';
+                    return (
+                      <div
+                        key={s}
+                        onClick={() => setSelectedStrategy(s)}
+                        style={{
+                          background: selectedStrategy === s ? T.ink : T.white,
+                          border: `1px solid ${selectedStrategy === s ? T.ink : T.border}`,
+                          borderRadius: 8, padding: '14px 16px', cursor: 'pointer', transition: 'all 0.15s',
+                        }}
+                      >
+                        <div style={{ fontFamily: 'Sora', fontSize: 13, fontWeight: 600, color: selectedStrategy === s ? T.white : T.ink, textTransform: 'capitalize', marginBottom: 10 }}>
+                          {s}
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                          {[
+                            { label: 'Total Cost', value: `$${(st.totalCost || 0).toLocaleString()}` },
+                            { label: 'Avg Inv', value: avgInv },
+                            { label: 'Max Workforce', value: maxWf },
+                          ].map(m => (
+                            <div key={m.label}>
+                              <div style={{ fontFamily: 'JetBrains Mono', fontSize: 8, color: selectedStrategy === s ? 'rgba(255,255,255,0.5)' : T.inkLight, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 2 }}>{m.label}</div>
+                              <div style={{ fontFamily: 'JetBrains Mono', fontSize: 14, fontWeight: 600, color: selectedStrategy === s ? T.white : T.accent }}>{m.value}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
             ) : (
-              <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>Select a strategy</div>
+              <Card><div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>Select a strategy to see PSI view</div></Card>
             )}
-          </Card>
+          </>
         )}
 
         {/* ─── Capacity (RCCP) Tab ─────────────────────────────── */}
@@ -362,43 +451,86 @@ function tdStyle(align = 'left') {
   return { padding: '6px 10px', textAlign: align, color: T.inkMid };
 }
 
-// ─── SVG Production Chart ─────────────────────────────────────────
+// ─── SVG PSI Chart (grouped bars + inventory line) ───────────────
 
-function ProdChart({ periods, demand, production, inventory }) {
+function PSIChart({ periods, demand, production, beginningInventory, endingInventory }) {
   if (!periods) return null;
-  const W = 700, H = 220;
-  const M = { top: 20, right: 30, bottom: 40, left: 50 };
+  const W = 700, H = 260;
+  const M = { top: 20, right: 30, bottom: 50, left: 55 };
   const iW = W - M.left - M.right;
   const iH = H - M.top - M.bottom;
 
-  const allVals = [...(demand || []), ...(production || []), ...(inventory || [])];
+  // Compute inventory line points including beginning inventory
+  const invLine = [beginningInventory, ...(endingInventory || [])];
+
+  const allVals = [...(demand || []), ...(production || []), ...invLine];
   const maxV = Math.max(...allVals.map(Math.abs), 1) * 1.15;
   const minV = Math.min(0, ...allVals) * 1.15;
-  const range = maxV - minV;
+  const range = maxV - minV || 1;
 
-  const x = (i) => M.left + (i / (periods.length - 1)) * iW;
-  const y = (v) => M.top + iH - ((v - minV) / range) * iH;
+  const groupW = iW / periods.length;
+  const barW = groupW * 0.3;
+  const barGap = groupW * 0.04;
 
-  const line = (data) => data.map((v, i) => `${i === 0 ? 'M' : 'L'} ${x(i)} ${y(v)}`).join(' ');
+  const yScale = (v) => M.top + iH - ((v - minV) / range) * iH;
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Production plan chart showing demand, production, and inventory levels over time" style={{ width: '100%', maxWidth: W, height: 'auto' }}>
+    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="PSI chart showing production and demand as grouped bars with inventory line overlay" style={{ width: '100%', maxWidth: W, height: 'auto' }}>
       {/* Zero line */}
-      <line x1={M.left} y1={y(0)} x2={W - M.right} y2={y(0)} stroke={T.border} strokeWidth={1} />
-      {/* Demand */}
-      {demand && <path d={line(demand)} fill="none" stroke={T.inkLight} strokeWidth={1.5} strokeDasharray="4,3" />}
-      {/* Production */}
-      {production && <path d={line(production)} fill="none" stroke={T.accent} strokeWidth={2} />}
-      {/* Inventory */}
-      {inventory && <path d={line(inventory)} fill="none" stroke={T.safe} strokeWidth={1.5} />}
-      {/* X labels */}
-      {periods.map((p, i) => (
-        <text key={p} x={x(i)} y={H - 8} textAnchor="middle" fontSize={8} fill={T.inkLight} fontFamily="JetBrains Mono">{p.slice(5)}</text>
+      <line x1={M.left} y1={yScale(0)} x2={W - M.right} y2={yScale(0)} stroke={T.border} strokeWidth={1} />
+
+      {/* Y-axis labels */}
+      {[0, Math.round(maxV / 2), Math.round(maxV)].map(v => (
+        <text key={v} x={M.left - 8} y={yScale(v) + 3} textAnchor="end" fontSize={8} fill={T.inkLight} fontFamily="JetBrains Mono">{v}</text>
       ))}
+
+      {/* Grouped bars per period */}
+      {periods.map((p, i) => {
+        const cx = M.left + i * groupW + groupW / 2;
+        const prodX = cx - barW - barGap / 2;
+        const demX = cx + barGap / 2;
+
+        const prodH = ((production[i] || 0) / range) * iH;
+        const demH = ((demand[i] || 0) / range) * iH;
+
+        return (
+          <g key={p}>
+            {/* Production bar */}
+            <rect x={prodX} y={yScale(0) - prodH} width={barW} height={prodH}
+              fill={T.accent} opacity={0.85} rx={2} />
+            {/* Demand bar */}
+            <rect x={demX} y={yScale(0) - demH} width={barW} height={demH}
+              fill={T.inkLight} opacity={0.5} rx={2} />
+            {/* Period label */}
+            <text x={cx} y={H - 28} textAnchor="middle" fontSize={9} fill={T.inkLight} fontFamily="JetBrains Mono">{p}</text>
+          </g>
+        );
+      })}
+
+      {/* Inventory line overlay */}
+      <path
+        d={invLine.map((v, i) => {
+          const px = i === 0 ? M.left : M.left + (i - 0.5) * groupW + groupW / 2;
+          return `${i === 0 ? 'M' : 'L'} ${px} ${yScale(v)}`;
+        }).join(' ')}
+        fill="none" stroke={T.safe} strokeWidth={2.5}
+      />
+      {/* Inventory dots */}
+      {invLine.map((v, i) => {
+        const px = i === 0 ? M.left : M.left + (i - 0.5) * groupW + groupW / 2;
+        return <circle key={i} cx={px} cy={yScale(v)} r={3.5} fill={T.safe} />;
+      })}
+
       {/* Legend */}
-      <text x={M.left} y={H - 22} fontSize={9} fill={T.inkLight} fontFamily="Inter">
-        <tspan fill={T.inkLight}>--- Demand</tspan>  <tspan fill={T.accent} dx={12}>— Production</tspan>  <tspan fill={T.safe} dx={12}>— Inventory</tspan>
-      </text>
+      <g transform={`translate(${M.left}, ${H - 10})`}>
+        <rect x={0} y={-6} width={10} height={10} fill={T.accent} opacity={0.85} rx={1} />
+        <text x={14} y={3} fontSize={9} fill={T.inkMid} fontFamily="Inter">Production</text>
+        <rect x={90} y={-6} width={10} height={10} fill={T.inkLight} opacity={0.5} rx={1} />
+        <text x={104} y={3} fontSize={9} fill={T.inkMid} fontFamily="Inter">Demand</text>
+        <line x1={180} y1={0} x2={200} y2={0} stroke={T.safe} strokeWidth={2.5} />
+        <circle cx={190} cy={0} r={3} fill={T.safe} />
+        <text x={206} y={3} fontSize={9} fill={T.inkMid} fontFamily="Inter">Inventory</text>
+      </g>
     </svg>
   );
 }

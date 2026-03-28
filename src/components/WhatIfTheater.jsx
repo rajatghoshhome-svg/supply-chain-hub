@@ -10,13 +10,12 @@ const DEFAULT_PRESETS = [
 ];
 
 const METRIC_ROWS = [
-  { key: 'drpExceptions',  label: 'DRP Exceptions',    extract: r => r.drp.exceptions,        lowerIsBetter: true },
-  { key: 'prodOrders',     label: 'Production Orders',  extract: r => r.production.orders,     lowerIsBetter: true },
-  { key: 'schedOrders',    label: 'Scheduled Orders',   extract: r => r.scheduling.orders,     lowerIsBetter: false },
-  { key: 'lateOrders',     label: 'Late Orders',        extract: r => r.scheduling.lateOrders, lowerIsBetter: true },
-  { key: 'makespan',       label: 'Total Makespan (h)', extract: r => r.scheduling.makespan,   lowerIsBetter: true },
-  { key: 'mrpExceptions',  label: 'MRP Exceptions',     extract: r => r.mrp.totalExceptions,   lowerIsBetter: true },
-  { key: 'mrpCritical',    label: 'MRP Critical',       extract: r => r.mrp.critical,          lowerIsBetter: true },
+  { key: 'totalCost',       label: 'Total Cost',           unit: '$',  extract: r => r.totalCost,         lowerIsBetter: true,  format: v => `$${Math.round(v).toLocaleString()}` },
+  { key: 'revenueAtRisk',   label: 'Revenue at Risk',      unit: '$',  extract: r => r.revenueAtRisk,     lowerIsBetter: true,  format: v => `$${Math.round(v).toLocaleString()}` },
+  { key: 'cashImpact',      label: 'Cash Impact',          unit: '$',  extract: r => r.cashImpact,        lowerIsBetter: true,  format: v => `$${Math.round(v).toLocaleString()}` },
+  { key: 'serviceLevel',    label: 'Service Level',        unit: '%',  extract: r => r.serviceLevel,      lowerIsBetter: false, format: v => `${v.toFixed(1)}%` },
+  { key: 'planExceptions',  label: 'Planning Exceptions',  unit: '#',  extract: r => r.planExceptions,    lowerIsBetter: true,  format: v => v },
+  { key: 'lateOrders',      label: 'Late Orders',          unit: '#',  extract: r => r.lateOrders,        lowerIsBetter: true,  format: v => v },
 ];
 
 // Static fallback risks for when the API is unavailable (e.g. Vercel deployment)
@@ -55,26 +54,22 @@ function getRiskIcon(risk) {
 }
 
 function generateStaticScenario(multiplier, label) {
-  const base = {
-    drp: { exceptions: 5 },
-    production: { orders: 14 },
-    scheduling: { orders: 14, lateOrders: 2, makespan: 32.6 },
-    mrp: { totalExceptions: 8, critical: 2 },
-  };
+  const baseCost = 172000;
+  const baseRevRisk = 22000;
+  const baseCash = 89000;
+  const baseSvc = 96.2;
+  const baseExceptions = 13;
+  const baseLate = 2;
+
   return {
     label,
     multiplier,
-    drp: { exceptions: Math.round(base.drp.exceptions * multiplier) },
-    production: { orders: Math.round(base.production.orders * multiplier) },
-    scheduling: {
-      orders: Math.round(base.scheduling.orders * multiplier),
-      lateOrders: Math.round(base.scheduling.lateOrders * Math.pow(multiplier, 1.5)),
-      makespan: Math.round(base.scheduling.makespan * multiplier * 10) / 10,
-    },
-    mrp: {
-      totalExceptions: Math.round(base.mrp.totalExceptions * Math.pow(multiplier, 1.3)),
-      critical: Math.round(base.mrp.critical * Math.pow(multiplier, 1.5)),
-    },
+    totalCost: Math.round(baseCost * multiplier),
+    revenueAtRisk: Math.round(baseRevRisk * Math.pow(multiplier, 1.8)),
+    cashImpact: Math.round(baseCash * multiplier),
+    serviceLevel: Math.round((baseSvc / Math.pow(multiplier, 0.3)) * 10) / 10,
+    planExceptions: Math.round(baseExceptions * Math.pow(multiplier, 1.3)),
+    lateOrders: Math.round(baseLate * Math.pow(multiplier, 1.5)),
   };
 }
 
@@ -390,7 +385,7 @@ export default function WhatIfTheater() {
                         textAlign: 'right', padding: '10px 14px', borderBottom: `1px solid ${T.border}`,
                         fontFamily: 'JetBrains Mono', fontSize: 14, fontWeight: 600, color,
                       }}>
-                        {typeof value === 'number' ? Math.round(value * 10) / 10 : value}
+                        {metric.format ? metric.format(value) : (typeof value === 'number' ? Math.round(value * 10) / 10 : value)}
                       </td>
                     );
                   })}
