@@ -75,6 +75,62 @@ const MODULE_LABELS = {
   mrp: 'MRP',
 };
 
+// Rich system prompts for direct Claude calls (when backend unavailable)
+const PREAMBLE = `You are an AI supply chain planning assistant for Champion Pet Foods, embedded in an ASCM/APICS-compliant planning platform.
+
+Champion Pet Foods — two brands: ORIJEN (premium, dry/freeze-dried/treats) and ACANA (heritage, dry/wet).
+Plants: DogStar Kitchens (Auburn KY, 9 work centers), NorthStar Kitchen (Edmonton AB, 5 work centers).
+DCs: DC-ATL (Atlanta), DC-DEN (Denver), DC-TOR (Toronto).
+9 product families, 105 SKUs, 5 customer channels.
+ASCM cascade: Demand > DRP > Production Plan > MPS/RCCP > MRP + Scheduling.
+
+Be concise, data-driven. Use markdown tables. Cite specific numbers. NEVER fabricate data — only reference context provided.`;
+
+const MODULE_DATA = {
+  demand: `\nDEMAND STATE: Holt-Winters + ML Ensemble. 12 weekly buckets.
+| Family | Avg Weekly | Trend | MAPE |
+|--------|-----------|-------|------|
+| Orijen Dry Dog | 23,252 | +4.2% | 6.2% |
+| Orijen Dry Cat | 15,800 | +6.1% | 7.8% |
+| Acana Dry Dog | 18,400 | flat | 8.1% |
+| Orijen Freeze-Dried | 8,200 | -2.3% | 11.4% |
+| Acana Wet Dog | 7,600 | +3.8% | 9.6% |
+Seasonal ramp W5-W6: 32-35k for Orijen Dry Dog. 3 active overrides. Freeze-Dried has weakest accuracy.`,
+
+  production_plan: `\nPRODUCTION STATE: 12 weekly periods. W1-W2 firmed.
+Orijen Dry Dog strategies: Chase $926,278 (REC), Level $912,418 (2 exceptions), Hybrid $966,223.
+Gross Reqs: 23,252 / 21,957 / 22,508 / 23,092 / 32,052 / 34,800 / 28,500 / 24,100 / 22,800 / 21,400 / 20,900 / 21,500
+Base rate: 21,518/wk. Extruders hit 92% util in W6. 52 exceptions, 7 critical.
+Heuristics: 14d safety stock, 20% OT cap, no subcontract (quality).`,
+
+  drp: `\nDRP STATE: 5 plant-DC lanes + 2 STO lanes. 8 open shipments, 186k lbs.
+DC-ATL: 4 SKUs, 42,500 OH, 18-22 DOH. DC-DEN: 28,300 OH, 9-14 DOH, Acana Dry Dog BELOW SS (5,200 vs 5,500). DC-TOR: 34,100 OH, Orijen Dry Dog below SS.
+Demand splits: Orijen Dry Dog 45%ATL/30%DEN/25%TOR.
+Move vs Make: MVM-301 CRITICAL — Orijen Orig DC-ATL>DC-DEN 2,400 units, MOVE saves $8,150 (34%), 3d vs 10d.
+MVM-302 WARNING — Acana Wet DC-TOR>DC-ATL 1,600 units, MOVE saves $3,200, cross-border risk.`,
+
+  scheduling: `\nSCHEDULING STATE — DogStar: 35 orders, 4 running, 12 complete, 2 behind. 78% avg util, 8.5h changeover.
+Extruder 1: Acana Heritage Dog 390/520 (75%) BEHIND. Extruder 2: Orijen Tundra Cat 236/380 (62%) BEHIND.
+Extruder 3: Orijen Original (88% ON PACE). Extruder 4: Acana Prairie (91% ON PACE).
+Pkg Line 2: MAINT downtime. CIP every Sunday, maint every other Friday.
+Changeover: same family 0h, same brand 0.5h, diff brand 1h, diff format 2h. Rule: EDD.`,
+
+  mrp: `\nMRP STATE: BOM example Orijen Original: Fresh Chicken Meal 0.35kg (2wk LT), Turkey 0.20kg, Herring 0.12kg (3wk LT).
+Exceptions: 3 expedite (2 critical), 2 reschedule-in, 1 reschedule-out, 1 cancel, 2 new PO.
+Risks: Fresh Chicken Meal 3-day gap W3, Extrusion capacity W5-W6, Freeze-dry coating new PO W4.
+Inventory: Chicken Meal 1,200kg OH + 2,400 on-order W2. Turkey 800kg adequate. Pkg Film 45k units (4.5wk).`,
+
+  general: `\nOVERVIEW: Demand 6-11% MAPE, 3 overrides. DRP: 8 shipments, 2 move-vs-make (1 critical), DC-DEN below SS.
+Production: Hybrid $966K, ramp W5-W6. Scheduling: 35 orders, 2 behind pace, 78% util.
+MRP: 9 exceptions, 2 critical expedites, Chicken Meal risk.
+Top actions: 1) STO DC-ATL>DC-DEN saves $8,150. 2) Monitor Extruder 1&2 pace. 3) Firm periods W3-W4.
+AI Trust: 71% (12/17 accepted).`,
+};
+
+const DIRECT_SYSTEM_PROMPTS = Object.fromEntries(
+  Object.entries(MODULE_DATA).map(([k, v]) => [k, PREAMBLE + v])
+);
+
 function detectModule() {
   const path = window.location.pathname;
   if (path.includes('demand')) return 'demand';
@@ -109,74 +165,111 @@ export default function ChatWidget() {
   const suggestions = MODULE_SUGGESTIONS[module] || MODULE_SUGGESTIONS.general;
   const moduleLabel = MODULE_LABELS[module] || 'Supply Chain Hub';
 
+  // Stream SSE response and append text deltas to messages
+  const handleSSEStream = async (response) => {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let started = false;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const event = JSON.parse(data);
+          if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+            const text = event.delta.text;
+            if (!started) {
+              started = true;
+              setLoading(false);
+              setMsgs(m => [...m, { role: 'assistant', content: text }]);
+            } else {
+              setMsgs(m => {
+                const updated = [...m];
+                updated[updated.length - 1] = {
+                  role: 'assistant',
+                  content: updated[updated.length - 1].content + text,
+                };
+                return updated;
+              });
+            }
+          }
+        } catch { /* skip */ }
+      }
+    }
+    if (!started) setLoading(false);
+  };
+
+  // Call Claude API directly from browser (fallback when backend unavailable)
+  const callClaudeDirect = async (chatMessages) => {
+    const apiKey = import.meta.env.VITE_CLAUDE_API_KEY;
+    if (!apiKey) return false;
+
+    const systemPrompt = DIRECT_SYSTEM_PROMPTS[module] || DIRECT_SYSTEM_PROMPTS.general;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 2048,
+        system: systemPrompt,
+        messages: chatMessages,
+        stream: true,
+      }),
+    });
+
+    if (!response.ok) throw new Error(`Claude API ${response.status}`);
+    await handleSSEStream(response);
+    return true;
+  };
+
   const send = async (q) => {
     const msg = q || inp.trim();
     if (!msg || loading) return;
     setInp('');
 
     const nextMsgs = [...msgs, { role: 'user', content: msg }];
+    const chatMessages = nextMsgs.map(m => ({ role: m.role, content: m.content }));
     setMsgs(nextMsgs);
     setLoading(true);
 
     try {
+      // Try backend API first
       const response = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          module,
-          messages: nextMsgs.map(m => ({ role: m.role, content: m.content })),
-        }),
+        body: JSON.stringify({ module, messages: chatMessages }),
       });
 
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err?.error || `HTTP ${response.status}`);
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let started = false;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const data = line.slice(6).trim();
-          if (data === '[DONE]') continue;
-          try {
-            const event = JSON.parse(data);
-            if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
-              const text = event.delta.text;
-              if (!started) {
-                started = true;
-                setLoading(false);
-                setMsgs(m => [...m, { role: 'assistant', content: text }]);
-              } else {
-                setMsgs(m => {
-                  const updated = [...m];
-                  updated[updated.length - 1] = {
-                    role: 'assistant',
-                    content: updated[updated.length - 1].content + text,
-                  };
-                  return updated;
-                });
-              }
-            }
-          } catch { /* skip */ }
-        }
-      }
-
-      if (!started) setLoading(false);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      await handleSSEStream(response);
       setTimeout(() => btmRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     } catch {
-      // API unavailable — use fallback responses for local dev without backend
+      // Backend unavailable — try calling Claude directly from browser
+      try {
+        const ok = await callClaudeDirect(chatMessages);
+        if (ok) {
+          setTimeout(() => btmRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+          return;
+        }
+      } catch { /* direct call failed too */ }
+
+      // Final fallback — static responses
       setLoading(false);
       const pool = FALLBACK_RESPONSES[module] || FALLBACK_RESPONSES.general;
       const fallback = pool[Math.floor(Math.random() * pool.length)];

@@ -60,7 +60,7 @@ import { buildSchedulingChatContext } from './ai-context/scheduling-context.js';
 import { buildBriefingChatContext } from './ai-context/briefing.js';
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-const MODEL = 'claude-sonnet-4-5-20250514';
+const MODEL = 'claude-sonnet-4-20250514';
 
 function buildPreamble() {
   // Pull live store summary if Champion store is initialized

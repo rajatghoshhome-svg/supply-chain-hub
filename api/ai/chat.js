@@ -7,7 +7,7 @@
  */
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-const MODEL = 'claude-sonnet-4-5-20250514';
+const MODEL = 'claude-sonnet-4-20250514';
 
 const PREAMBLE = `You are an AI supply chain planning assistant embedded in an ASCM/APICS-compliant planning platform for Champion Pet Foods.
 
