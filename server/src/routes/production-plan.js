@@ -343,6 +343,162 @@ productionPlanRouter.post('/run', (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Champion Pet Foods Production Planning Endpoints
+// ─────────────────────────────────────────────────────────────────────────────
+
+let _prodStore;
+async function getProdStore() {
+  if (!_prodStore) _prodStore = await import('../data/champion-production-store.js');
+  return _prodStore;
+}
+
+// GET /api/production-plan/champion/summary
+productionPlanRouter.get('/champion/summary', async (req, res) => {
+  try {
+    const s = await getProdStore();
+    res.json(s.getProductionSummary());
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/production-plan/champion/plants
+productionPlanRouter.get('/champion/plants', async (req, res) => {
+  try {
+    const s = await getProdStore();
+    res.json(s.getAllPlantPlans());
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/production-plan/champion/plant/:plantCode
+productionPlanRouter.get('/champion/plant/:plantCode', async (req, res) => {
+  try {
+    const s = await getProdStore();
+    res.json(s.getPlantPlan(req.params.plantCode));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/production-plan/champion/family/:plantCode/:familyId
+productionPlanRouter.get('/champion/family/:plantCode/:familyId', async (req, res) => {
+  try {
+    const s = await getProdStore();
+    res.json(s.getFamilyPlan(req.params.plantCode, req.params.familyId));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/production-plan/champion/exceptions?plant=&severity=&type=&status=
+productionPlanRouter.get('/champion/exceptions', async (req, res) => {
+  try {
+    const s = await getProdStore();
+    const { plant, severity, type, status } = req.query;
+    const filters = {};
+    if (plant) filters.plant = plant;
+    if (severity) filters.severity = severity;
+    if (type) filters.type = type;
+    if (status) filters.status = status;
+    res.json(s.getExceptions(filters));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// PUT /api/production-plan/champion/exception/:id/acknowledge
+productionPlanRouter.put('/champion/exception/:id/acknowledge', async (req, res) => {
+  try {
+    const s = await getProdStore();
+    res.json(s.acknowledgeException(req.params.id));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// PUT /api/production-plan/champion/exception/:id/resolve
+productionPlanRouter.put('/champion/exception/:id/resolve', async (req, res) => {
+  try {
+    const s = await getProdStore();
+    const { resolution } = req.body;
+    res.json(s.resolveException(req.params.id, resolution));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/production-plan/champion/firm
+productionPlanRouter.post('/champion/firm', async (req, res) => {
+  try {
+    const s = await getProdStore();
+    const { plantCode, familyId, periodIndex } = req.body;
+    res.json(s.firmPeriod(plantCode, familyId, periodIndex));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE /api/production-plan/champion/firm
+productionPlanRouter.delete('/champion/firm', async (req, res) => {
+  try {
+    const s = await getProdStore();
+    const { plantCode, familyId, periodIndex } = req.body;
+    res.json(s.unfirmPeriod(plantCode, familyId, periodIndex));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/production-plan/champion/firm/:plantCode/:familyId
+productionPlanRouter.get('/champion/firm/:plantCode/:familyId', async (req, res) => {
+  try {
+    const s = await getProdStore();
+    res.json(s.getFirmedPeriods(req.params.plantCode, req.params.familyId));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/production-plan/champion/calendars
+productionPlanRouter.get('/champion/calendars', async (req, res) => {
+  try {
+    const s = await getProdStore();
+    res.json(s.getPlantCalendars());
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// PUT /api/production-plan/champion/calendar/:plantCode
+productionPlanRouter.put('/champion/calendar/:plantCode', async (req, res) => {
+  try {
+    const s = await getProdStore();
+    res.json(s.updatePlantCalendar(req.params.plantCode, req.body));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/production-plan/champion/rates?plant=
+productionPlanRouter.get('/champion/rates', async (req, res) => {
+  try {
+    const s = await getProdStore();
+    const { plant } = req.query;
+    res.json(s.getProductionRates(plant));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// PUT /api/production-plan/champion/rate/:plantCode/:familyId
+productionPlanRouter.put('/champion/rate/:plantCode/:familyId', async (req, res) => {
+  try {
+    const s = await getProdStore();
+    res.json(s.updateProductionRate(req.params.plantCode, req.params.familyId, req.body));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/production-plan/champion/rccp/:plantCode
+productionPlanRouter.get('/champion/rccp/:plantCode', async (req, res) => {
+  try {
+    const s = await getProdStore();
+    res.json(s.getRCCP(req.params.plantCode));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/production-plan/champion/heuristics
+productionPlanRouter.get('/champion/heuristics', async (req, res) => {
+  try {
+    const s = await getProdStore();
+    res.json(s.getHeuristics());
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// PUT /api/production-plan/champion/heuristics
+productionPlanRouter.put('/champion/heuristics', async (req, res) => {
+  try {
+    const s = await getProdStore();
+    res.json(s.updateHeuristics(req.body));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 function makePeriods(count) {
   const periods = [];
   const base = new Date('2026-04-07');

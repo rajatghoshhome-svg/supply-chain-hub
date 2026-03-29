@@ -28,9 +28,8 @@ class SafeRender extends Component {
 const CASCADE_STEPS = [
   { module: 'demand', label: 'Demand Plan', path: '/demand', desc: 'Statistical forecasting with 5 methods, best-fit selection, accuracy metrics' },
   { module: 'drp', label: 'DRP', path: '/drp', desc: 'Distribution requirements across 3 DCs, transit lead time netting, fair-share allocation' },
-  { module: 'production', label: 'Production Plan', path: '/production-plan', desc: 'Chase/level/hybrid strategies per plant, S&OP aggregate planning' },
+  { module: 'production', label: 'Production Plan', path: '/production-plan', desc: 'RCCP capacity validation, exception-driven firming, chase/level/hybrid strategies' },
   { module: 'scheduling', label: 'Scheduling', path: '/scheduling', desc: 'SPT/EDD/CR sequencing, Gantt chart, changeover optimization' },
-  { module: 'mrp', label: 'MRP', path: '/mrp', desc: 'Plant-specific BOM explosion, gross-to-net netting, lot sizing, exception generation' },
 ];
 
 export default function Landing() {
@@ -80,7 +79,6 @@ export default function Landing() {
         { key: 'drp', endpoint: '/api/drp/demo', label: 'DRP' },
         { key: 'production', endpoint: '/api/production-plan/demo', label: 'Production' },
         { key: 'scheduling', endpoint: '/api/scheduling/demo', label: 'Scheduling' },
-        { key: 'mrp', endpoint: '/api/mrp/demo', label: 'MRP' },
       ];
       const results = {};
       for (const m of modules) {
@@ -163,7 +161,7 @@ export default function Landing() {
       {moduleHealth && (
         <div className="landing-section" style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px 0' }}>
           <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9.5, color: T.inkLight, letterSpacing: 1.4, marginBottom: 10, textTransform: 'uppercase' }}>System Health</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
             {Object.entries(moduleHealth).map(([key, m]) => (
               <div
                 key={key}
@@ -199,7 +197,7 @@ export default function Landing() {
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           {[
             { label: 'Override Forecast', path: '/demand', desc: 'Adjust demand and trigger cascade' },
-            { label: 'Review Exceptions', path: '/mrp', desc: 'Accept, defer, or dismiss action messages' },
+            { label: 'Review Exceptions', path: '/production-plan', desc: 'Stockout warnings, capacity overloads, inventory alerts' },
             { label: 'Resequence Orders', path: '/scheduling', desc: 'Drag orders on the Gantt chart' },
             { label: 'Decision Log', path: '/decisions', desc: 'Review all planning decisions' },
             { label: 'Import Data', path: '/onboarding', desc: 'Upload CSV to replace demo data' },
@@ -266,7 +264,7 @@ export default function Landing() {
         {/* Closed loop note */}
         <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
           <div style={{ fontSize: 11, color: T.inkLight, fontFamily: 'JetBrains Mono', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ color: T.accent }}>⟲</span> Scheduling ↔ MRP closed loop — timing shifts feed back to MPS
+            <span style={{ color: T.accent }}>⟲</span> Scheduling ↔ Production closed loop — timing shifts feed back to capacity plan
           </div>
         </div>
       </div>

@@ -7,7 +7,6 @@ const NAV_ITEMS = [
   ['/production-plan', 'Production'],
   ['/drp', 'Distribution'],
   ['/scheduling', 'Scheduling'],
-  ['/mrp', 'Materials'],
   ['/decisions', 'Decisions'],
 ];
 

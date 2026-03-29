@@ -1,596 +1,962 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { T } from '../styles/tokens';
 import ModuleLayout from '../components/shared/ModuleLayout';
 import PageHeader from '../components/shared/PageHeader';
-import Card from '../components/shared/Card';
-import TrustScore from '../components/TrustScore';
-import DataSourceBadge from '../components/shared/DataSourceBadge';
 
 const TABS = [
-  { id: 'psi', label: 'Production Plan' },
-  { id: 'capacity', label: 'Capacity Utilization' },
-  { id: 'strategy', label: 'Strategy Comparison' },
+  { id: 'plan', label: 'Production Plan' },
+  { id: 'rccp', label: 'RCCP' },
+  { id: 'inputs', label: 'Inputs & Heuristics' },
 ];
 
-// Plant code to display name mapping
-const PLANT_NAMES = {
-  'PLT-PDX': 'Portland Plant',
-  'PLT-ATX': 'Austin Plant',
-  'PLT-NSH': 'Nashville Plant',
-};
+const API = '/api/production-plan/champion';
 
-// Work center code to display name mapping
-const WC_NAMES = {
-  'WC-P-MIXING': 'Dry Mixing Line',
-  'WC-P-BAKING': 'Baking/Forming Ovens',
-  'WC-P-PACKING': 'Packaging & Case Packing',
-  'WC-P-QC': 'Quality Control & Testing',
-  'WC-A-BLENDING': 'Liquid Blending',
-  'WC-A-FILLING': 'Bottle/Can Filling Line',
-  'WC-A-PASTEUR': 'Pasteurization',
-  'WC-A-PACKING': 'Case Packing',
-  'WC-N-ROASTING': 'Nut Roasting',
-  'WC-N-GRINDING': 'Grinding & Milling',
-  'WC-N-BLENDING': 'Blending & Mixing',
-  'WC-N-PACKING': 'Packaging',
-};
+// Severity dot colors
+const SEV = { critical: T.risk, warning: T.warn, info: T.inkLight };
+const SEV_BG = { critical: T.riskBg, warning: T.warnBg, info: '#F0F0EE' };
 
-// ─── Static fallback data (used when API is unavailable, e.g. Vercel) ────
-const STATIC_PROD_PLAN = {
-  periods: ['W13','W14','W15','W16','W17','W18'],
-  plantsPlanned: 1, totalProductsPlanned: 3, strategy: 'chase',
-  plantResults: [
-    {
-      plantCode: 'PLT-PDX', productsPlanned: 3,
-      productPlans: [
-        {
-          skuCode: 'GRN-BAR', skuName: 'Oat & Honey Granola Bar',
-          plantGrossReqs: [528,515,505,495,488,480],
-          plan: {
-            periods: ['W13','W14','W15','W16','W17','W18'],
-            demand: [528,515,505,495,488,480],
-            strategies: {
-              chase: { production: [528,515,505,495,488,480], endingInventory: [0,0,0,0,0,0], workforce: [22,21,21,20,20,20], totalCost: 56800,
-                rccp: [
-                  { code: 'WC-P-MIXING', hoursPerUnit: 0.12, capacityHoursPerPeriod: 160, loadHours: [63,62,61,59,59,58], utilization: [40,39,38,37,37,36], overloaded: [false,false,false,false,false,false] },
-                  { code: 'WC-P-BAKING', hoursPerUnit: 0.18, capacityHoursPerPeriod: 140, loadHours: [95,93,91,89,88,86], utilization: [68,66,65,64,63,62], overloaded: [false,false,false,false,false,false] },
-                ] },
-              level: { production: [502,502,502,502,502,502], endingInventory: [-26,13,10,17,31,53], workforce: [21,21,21,21,21,21], totalCost: 54200,
-                rccp: [
-                  { code: 'WC-P-MIXING', hoursPerUnit: 0.12, capacityHoursPerPeriod: 160, loadHours: [60,60,60,60,60,60], utilization: [38,38,38,38,38,38], overloaded: [false,false,false,false,false,false] },
-                ] },
-              hybrid: { production: [520,510,505,500,490,485], endingInventory: [-8,3,3,8,10,15], workforce: [22,21,21,21,20,20], totalCost: 55400,
-                rccp: [
-                  { code: 'WC-P-MIXING', hoursPerUnit: 0.12, capacityHoursPerPeriod: 160, loadHours: [62,61,61,60,59,58], utilization: [39,38,38,38,37,36], overloaded: [false,false,false,false,false,false] },
-                ] },
-            },
-            capacity: {
-              workCenters: [
-                { name: 'Dry Mixing Line', available: 160, used: 63, utilization: 0.394 },
-                { name: 'Baking/Forming Ovens', available: 140, used: 95, utilization: 0.679 },
-                { name: 'Packaging & Case Packing', available: 180, used: 72, utilization: 0.400 },
-              ],
-            },
-          },
-        },
-        {
-          skuCode: 'PRO-BAR', skuName: 'Peanut Butter Protein Bar',
-          plantGrossReqs: [395,385,375,368,360,352],
-          plan: {
-            periods: ['W13','W14','W15','W16','W17','W18'],
-            demand: [395,385,375,368,360,352],
-            strategies: {
-              chase: { production: [395,385,375,368,360,352], endingInventory: [0,0,0,0,0,0], workforce: [16,16,15,15,15,14], totalCost: 52100,
-                rccp: [{ code: 'WC-P-BAKING', hoursPerUnit: 0.20, capacityHoursPerPeriod: 140, loadHours: [79,77,75,74,72,70], utilization: [56,55,54,53,51,50], overloaded: [false,false,false,false,false,false] }] },
-              level: { production: [373,373,373,373,373,373], endingInventory: [-22,12,10,15,28,49], workforce: [15,15,15,15,15,15], totalCost: 50600,
-                rccp: [{ code: 'WC-P-BAKING', hoursPerUnit: 0.20, capacityHoursPerPeriod: 140, loadHours: [75,75,75,75,75,75], utilization: [53,53,53,53,53,53], overloaded: [false,false,false,false,false,false] }] },
-              hybrid: { production: [390,380,375,370,362,355], endingInventory: [-5,0,0,2,4,7], workforce: [16,16,15,15,15,15], totalCost: 51200,
-                rccp: [{ code: 'WC-P-BAKING', hoursPerUnit: 0.20, capacityHoursPerPeriod: 140, loadHours: [78,76,75,74,72,71], utilization: [56,54,54,53,52,51], overloaded: [false,false,false,false,false,false] }] },
-            },
-            capacity: { workCenters: [
-              { name: 'Baking/Forming Ovens', available: 140, used: 79, utilization: 0.564 },
-            ]},
-          },
-        },
-        {
-          skuCode: 'TRL-MIX', skuName: 'Classic Trail Mix',
-          plantGrossReqs: [378,367,358,350,340,332],
-          plan: {
-            periods: ['W13','W14','W15','W16','W17','W18'],
-            demand: [378,367,358,350,340,332],
-            strategies: {
-              chase: { production: [378,367,358,350,340,332], endingInventory: [0,0,0,0,0,0], workforce: [12,12,11,11,11,11], totalCost: 63200,
-                rccp: [{ code: 'WC-P-MIXING', hoursPerUnit: 0.15, capacityHoursPerPeriod: 160, loadHours: [57,55,54,53,51,50], utilization: [35,34,34,33,32,31], overloaded: [false,false,false,false,false,false] }] },
-              level: { production: [354,354,354,354,354,354], endingInventory: [-24,13,9,13,27,49], workforce: [11,11,11,11,11,11], totalCost: 61500,
-                rccp: [{ code: 'WC-P-MIXING', hoursPerUnit: 0.15, capacityHoursPerPeriod: 160, loadHours: [53,53,53,53,53,53], utilization: [33,33,33,33,33,33], overloaded: [false,false,false,false,false,false] }] },
-              hybrid: { production: [375,365,358,352,342,335], endingInventory: [-3,1,1,3,5,8], workforce: [12,12,11,11,11,11], totalCost: 62400,
-                rccp: [{ code: 'WC-P-MIXING', hoursPerUnit: 0.15, capacityHoursPerPeriod: 160, loadHours: [56,55,54,53,51,50], utilization: [35,34,34,33,32,31], overloaded: [false,false,false,false,false,false] }] },
-            },
-            capacity: { workCenters: [
-              { name: 'Dry Mixing Line', available: 160, used: 57, utilization: 0.356 },
-            ]},
-          },
-        },
-      ],
-    },
-  ],
-};
+// ─── Helper styles ───────────────────────────────────────────────────────────
 
-const BEGINNING_INVENTORY = { 'GRN-BAR': 450, 'PRO-BAR': 280, 'TRL-MIX': 310 };
+function thStyle(align = 'left') {
+  return { textAlign: align, padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, fontFamily: 'JetBrains Mono', whiteSpace: 'nowrap' };
+}
+
+function tdStyle(align = 'left') {
+  return { padding: '6px 10px', textAlign: align, color: T.inkMid, fontFamily: 'JetBrains Mono', fontSize: 12 };
+}
+
+// ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function ProductionPlanPage() {
-  const [tab, setTab] = useState('psi');
-  const [rawData, setRawData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState('plan');
+  const [plants, setPlants] = useState(null);
+  const [exceptions, setExceptions] = useState([]);
+  const [calendars, setCalendars] = useState(null);
+  const [rates, setRates] = useState(null);
+  const [summary, setSummary] = useState(null);
   const [selectedPlant, setSelectedPlant] = useState(null);
-  const [selectedSku, setSelectedSku] = useState(null);
-  const [selectedStrategy, setSelectedStrategy] = useState('chase');
-  const [lockedPeriods, setLockedPeriods] = useState({});
-  const [editedCells, setEditedCells] = useState({});
-  const [editingCell, setEditingCell] = useState(null);
-  const [isLive, setIsLive] = useState(false);
+  const [selectedFamily, setSelectedFamily] = useState(null);
+  const [selectedStrategy, setSelectedStrategy] = useState('hybrid');
+  const [firmedPeriods, setFirmedPeriods] = useState(new Set());
+  const [heuristics, setHeuristics] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [exceptionFilter, setExceptionFilter] = useState('all'); // all, critical, warning, info
+  const [expandedExceptions, setExpandedExceptions] = useState(new Set());
 
-  useEffect(() => {
-    fetch('/api/production-plan/demo')
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then(d => {
-        setRawData(d);
-        setIsLive(true);
-        if (d.plantResults?.length > 0) {
-          setSelectedPlant(d.plantResults[0].plantCode);
-          if (d.plantResults[0].productPlans?.length > 0) {
-            setSelectedSku(d.plantResults[0].productPlans[0].skuCode);
-          }
-        }
-        setLoading(false);
-      })
-      .catch(() => {
-        console.warn('Production Plan API unavailable, using static fallback');
-        setIsLive(false);
-        const d = STATIC_PROD_PLAN;
-        setRawData(d);
-        if (d.plantResults?.length > 0) {
-          setSelectedPlant(d.plantResults[0].plantCode);
-          if (d.plantResults[0].productPlans?.length > 0) {
-            setSelectedSku(d.plantResults[0].productPlans[0].skuCode);
-          }
-        }
-        setLoading(false);
-      });
+  // ─── Data fetching ─────────────────────────────────────────────────────────
+
+  const fetchSummary = useCallback(() => {
+    fetch(`${API}/summary`)
+      .then(r => r.json())
+      .then(setSummary)
+      .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (!selectedPlant) return;
-    fetch(`/api/production-plan/locked-periods?plant=${selectedPlant}`)
-      .then(r => r.ok ? r.json() : { lockedPeriods: [] })
-      .then(d => {
-        const map = {};
-        (d.lockedPeriods || []).forEach(lp => { map[lp.period] = true; });
-        setLockedPeriods(map);
+  const fetchPlants = useCallback(() => {
+    fetch(`${API}/plants`)
+      .then(r => r.json())
+      .then(data => {
+        setPlants(data);
+        if (data?.plants?.length > 0 && !selectedPlant) {
+          setSelectedPlant(data.plants[0].plantCode);
+          const fams = data.plants[0].familyPlans;
+          if (fams?.length > 0) setSelectedFamily(fams[0].familyId);
+        }
+        setLoading(false);
       })
-      .catch(() => {});
+      .catch(() => setLoading(false));
   }, [selectedPlant]);
 
-  const toggleLockPeriod = (period) => {
-    const isLocked = !!lockedPeriods[period];
-    const newLocked = { ...lockedPeriods, [period]: !isLocked };
-    if (!newLocked[period]) delete newLocked[period];
-    setLockedPeriods(newLocked);
-    fetch('/api/production-plan/lock-period', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plant: selectedPlant, period, locked: !isLocked }),
-    }).catch(() => {});
+  const fetchExceptions = useCallback(() => {
+    const params = exceptionFilter !== 'all' ? `?severity=${exceptionFilter}` : '';
+    fetch(`${API}/exceptions${params}`)
+      .then(r => r.json())
+      .then(data => setExceptions(data.exceptions || []))
+      .catch(() => {});
+  }, [exceptionFilter]);
+
+  const fetchCalendars = useCallback(() => {
+    fetch(`${API}/calendars`)
+      .then(r => r.json())
+      .then(setCalendars)
+      .catch(() => {});
+  }, []);
+
+  const fetchRates = useCallback(() => {
+    fetch(`${API}/rates`)
+      .then(r => r.json())
+      .then(setRates)
+      .catch(() => {});
+  }, []);
+
+  const fetchHeuristics = useCallback(() => {
+    fetch(`${API}/heuristics`)
+      .then(r => r.json())
+      .then(setHeuristics)
+      .catch(() => {});
+  }, []);
+
+  const fetchFirmed = useCallback(() => {
+    if (!selectedPlant || !selectedFamily) return;
+    fetch(`${API}/firm/${selectedPlant}/${selectedFamily}`)
+      .then(r => r.json())
+      .then(data => setFirmedPeriods(new Set(data.firmedPeriods || [])))
+      .catch(() => {});
+  }, [selectedPlant, selectedFamily]);
+
+  useEffect(() => {
+    fetchSummary();
+    fetchPlants();
+    fetchExceptions();
+  }, [fetchSummary, fetchPlants, fetchExceptions]);
+
+  useEffect(() => {
+    if (tab === 'inputs') {
+      fetchCalendars();
+      fetchRates();
+      fetchHeuristics();
+    }
+  }, [tab, fetchCalendars, fetchRates, fetchHeuristics]);
+
+  useEffect(() => { fetchFirmed(); }, [fetchFirmed]);
+
+  // ─── Actions ───────────────────────────────────────────────────────────────
+
+  const handleFirmPeriod = async (periodIndex) => {
+    const isFirmed = firmedPeriods.has(periodIndex);
+    const method = isFirmed ? 'DELETE' : 'POST';
+    try {
+      await fetch(`${API}/firm`, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plantCode: selectedPlant, familyId: selectedFamily, periodIndex }),
+      });
+      setFirmedPeriods(prev => {
+        const next = new Set(prev);
+        isFirmed ? next.delete(periodIndex) : next.add(periodIndex);
+        return next;
+      });
+    } catch { /* ignore */ }
   };
 
-  const handleCellEdit = (periodIdx, value) => {
-    const key = `${selectedSku}-${periodIdx}`;
-    const parsed = parseInt(value, 10);
-    if (isNaN(parsed) || parsed < 0) return;
-    setEditedCells(prev => ({ ...prev, [key]: parsed }));
-    setEditingCell(null);
+  const handleAcknowledge = async (excId) => {
+    try {
+      await fetch(`${API}/exception/${excId}/acknowledge`, { method: 'PUT' });
+      setExceptions(prev => prev.map(e => e.id === excId ? { ...e, status: 'acknowledged' } : e));
+    } catch { /* ignore */ }
   };
 
-  const currentPlant = rawData?.plantResults?.find(p => p.plantCode === selectedPlant);
-  const results = currentPlant?.productPlans || [];
-  const selectedResult = results.find(r => r.skuCode === selectedSku);
-  const plan = selectedResult?.plan;
-  const strategy = plan?.strategies?.[selectedStrategy];
+  const handleResolve = async (excId, resolution) => {
+    try {
+      await fetch(`${API}/exception/${excId}/resolve`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resolution }),
+      });
+      setExceptions(prev => prev.map(e => e.id === excId ? { ...e, status: 'resolved', resolution } : e));
+    } catch { /* ignore */ }
+  };
+
+  const updateHeuristic = async (key, value) => {
+    try {
+      await fetch(`${API}/heuristics`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [key]: value }),
+      });
+      setHeuristics(prev => ({
+        ...prev,
+        heuristics: { ...prev.heuristics, [key]: value },
+      }));
+    } catch { /* ignore */ }
+  };
+
+  // ─── Derived data ──────────────────────────────────────────────────────────
+
+  const currentPlant = plants?.plants?.find(p => p.plantCode === selectedPlant);
+  const familyPlans = currentPlant?.familyPlans || [];
+  const currentFamilyPlan = familyPlans.find(f => f.familyId === selectedFamily);
+  const strategy = currentFamilyPlan?.plan?.strategies?.[selectedStrategy];
+  const periods = currentFamilyPlan?.plan?.periods || [];
+  const grossReqs = currentFamilyPlan?.plan?.grossReqs || [];
+
+  const openExceptions = exceptions.filter(e => e.status === 'open');
+  const critCount = openExceptions.filter(e => e.severity === 'critical').length;
+  const warnCount = openExceptions.filter(e => e.severity === 'warning').length;
+
+  // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
     <ModuleLayout moduleContext="production_plan" tabs={TABS} activeTab={tab} onTabChange={setTab}>
-      <PageHeader title="Production Planning" subtitle="Aggregate & Capacity">
-        <DataSourceBadge isLive={isLive} />
-        <TrustScore module="production" compact />
+      <PageHeader title="Production Planning" subtitle="CHAMPION PET FOODS — 2 PLANTS × 8 WORK CENTERS">
+        {summary && (
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+            {[
+              { label: 'Families', value: summary.familiesPlanned, color: T.ink },
+              { label: 'Exceptions', value: summary.totalExceptions, color: summary.totalExceptions > 0 ? T.warn : T.safe },
+              { label: 'Critical', value: summary.criticalExceptions, color: summary.criticalExceptions > 0 ? T.risk : T.safe },
+            ].map(kpi => (
+              <div key={kpi.label} style={{ textAlign: 'center' }}>
+                <div style={{ fontFamily: 'JetBrains Mono', fontSize: 8, color: T.inkLight, letterSpacing: 1.2, textTransform: 'uppercase' }}>{kpi.label}</div>
+                <div style={{ fontFamily: 'Sora', fontSize: 18, fontWeight: 600, color: kpi.color }}>{kpi.value}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </PageHeader>
 
-      <div className="module-content" style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
 
-        {/* Plant selector */}
-        {rawData?.plantResults && (
-          <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
-            {rawData.plantResults.map(p => (
-              <button
-                key={p.plantCode}
-                onClick={() => {
-                  setSelectedPlant(p.plantCode);
-                  if (p.productPlans?.length > 0) setSelectedSku(p.productPlans[0].skuCode);
-                }}
+        {/* ─── Plant selector ─── */}
+        {plants?.plants && (
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+            {plants.plants.map(p => (
+              <button key={p.plantCode} onClick={() => {
+                setSelectedPlant(p.plantCode);
+                const fams = p.familyPlans;
+                if (fams?.length > 0) setSelectedFamily(fams[0].familyId);
+              }}
                 style={{
                   background: selectedPlant === p.plantCode ? T.ink : T.white,
                   color: selectedPlant === p.plantCode ? T.white : T.ink,
                   border: `1px solid ${selectedPlant === p.plantCode ? T.ink : T.border}`,
                   borderRadius: 6, padding: '6px 14px', cursor: 'pointer',
-                  fontFamily: 'JetBrains Mono', fontSize: 11, fontWeight: 500, transition: 'all 0.12s',
-                }}
-              >
-                {PLANT_NAMES[p.plantCode] || p.plantCode}
-                <span style={{ marginLeft: 6, fontSize: 9, color: selectedPlant === p.plantCode ? 'rgba(255,255,255,0.5)' : T.inkLight, fontFamily: 'JetBrains Mono' }}>({p.plantCode})</span>
-                <span style={{ marginLeft: 6, fontSize: 10, color: selectedPlant === p.plantCode ? 'rgba(255,255,255,0.6)' : T.inkLight }}>
-                  {p.productsPlanned} products
+                  fontFamily: 'Sora', fontSize: 12, fontWeight: 500, transition: 'all 0.12s',
+                }}>
+                {p.plantName}
+                <span style={{ marginLeft: 8, fontSize: 10, opacity: 0.6, fontFamily: 'JetBrains Mono' }}>
+                  {p.familyPlans?.length || 0} families
                 </span>
               </button>
             ))}
           </div>
         )}
 
-        {/* SKU selector */}
-        {results.length > 0 && (
-          <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
-            {results.map(r => (
-              <button
-                key={r.skuCode}
-                onClick={() => setSelectedSku(r.skuCode)}
-                style={{
-                  background: selectedSku === r.skuCode ? T.ink : T.white,
-                  color: selectedSku === r.skuCode ? T.white : T.ink,
-                  border: `1px solid ${selectedSku === r.skuCode ? T.ink : T.border}`,
-                  borderRadius: 6, padding: '5px 10px', cursor: 'pointer',
-                  fontFamily: 'JetBrains Mono', fontSize: 11, transition: 'all 0.12s',
-                }}
-              >
-                {r.skuCode}
-              </button>
-            ))}
+        {/* ─── Family selector ─── */}
+        {familyPlans.length > 0 && (
+          <div style={{ display: 'flex', gap: 4, marginBottom: 20, flexWrap: 'wrap' }}>
+            {familyPlans.map(fp => {
+              const hasExc = exceptions.some(e => e.familyId === fp.familyId && e.status === 'open');
+              return (
+                <button key={fp.familyId} onClick={() => setSelectedFamily(fp.familyId)}
+                  style={{
+                    background: selectedFamily === fp.familyId ? T.modProduction : T.white,
+                    color: selectedFamily === fp.familyId ? T.white : T.ink,
+                    border: `1px solid ${selectedFamily === fp.familyId ? T.modProduction : hasExc ? T.warn : T.border}`,
+                    borderRadius: 5, padding: '4px 10px', cursor: 'pointer',
+                    fontFamily: 'JetBrains Mono', fontSize: 11, transition: 'all 0.12s',
+                  }}>
+                  {fp.familyName || fp.familyId}
+                  {hasExc && <span style={{ marginLeft: 4, color: selectedFamily === fp.familyId ? '#FFD' : T.risk, fontSize: 10 }}>●</span>}
+                </button>
+              );
+            })}
           </div>
         )}
 
-        {/* ─── Strategy Comparison Tab ─────────────────────────── */}
-        {tab === 'strategy' && (
-          <>
-            {loading ? (
-              <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>Running production plan...</div>
-            ) : plan ? (
-              <>
-                <div className="strategy-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
-                  {['chase', 'level', 'hybrid'].map(s => {
-                    const st = plan.strategies[s];
-                    const isRecommended = plan.recommended === s;
-                    return (
-                      <div key={s} onClick={() => setSelectedStrategy(s)}
-                        style={{ background: selectedStrategy === s ? T.ink : T.white, border: `2px solid ${isRecommended ? T.safe : selectedStrategy === s ? T.ink : T.border}`, borderRadius: 10, padding: '20px', cursor: 'pointer', transition: 'all 0.15s' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                          <div style={{ fontFamily: 'Sora', fontSize: 15, fontWeight: 600, color: selectedStrategy === s ? T.white : T.ink, textTransform: 'capitalize' }}>{s}</div>
-                          {isRecommended && (
-                            <span style={{ background: T.safeBg, color: T.safe, border: `1px solid ${T.safe}`, padding: '2px 8px', borderRadius: 4, fontSize: 9, fontWeight: 600 }}>RECOMMENDED</span>
-                          )}
-                        </div>
-                        <div style={{ fontFamily: 'Sora', fontSize: 24, fontWeight: 600, color: selectedStrategy === s ? T.white : T.accent, marginBottom: 8 }}>${Math.round(st?.totalCost || 0).toLocaleString()}</div>
-                        <div style={{ fontSize: 11, color: selectedStrategy === s ? 'rgba(255,255,255,0.7)' : T.inkLight }}>
-                          {s === 'chase' && 'Match demand exactly. Higher workforce change costs.'}
-                          {s === 'level' && 'Constant rate. Higher inventory costs.'}
-                          {s === 'hybrid' && 'Base rate + overtime for peaks.'}
-                        </div>
-                        {st?.exceptions?.length > 0 && (
-                          <div style={{ marginTop: 8, fontSize: 10, color: T.risk, fontWeight: 500 }}>{st.exceptions.length} exception(s)</div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                {strategy && (
-                  <Card title={`${selectedStrategy.charAt(0).toUpperCase() + selectedStrategy.slice(1)} Strategy \u2014 ${selectedSku}`}>
-                    <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, fontFamily: 'JetBrains Mono' }}>
-                        <thead>
-                          <tr style={{ borderBottom: `2px solid ${T.border}` }}>
-                            <th scope="col" style={thStyle('left')}>Period</th>
-                            <th scope="col" style={thStyle('right')}>Demand</th>
-                            <th scope="col" style={thStyle('right')}>Production</th>
-                            {strategy.overtime && <th scope="col" style={thStyle('right')}>Overtime</th>}
-                            {strategy.subcontract && <th scope="col" style={thStyle('right')}>Subcontract</th>}
-                            <th scope="col" style={thStyle('right')}>Ending Inventory</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rawData?.periods.map((p, i) => (
-                            <tr key={p} style={{ borderBottom: `1px solid ${T.border}` }}>
-                              <td style={tdStyle()}>{p}</td>
-                              <td style={tdStyle('right')}>{selectedResult.plantGrossReqs[i]}</td>
-                              <td style={{ ...tdStyle('right'), color: T.accent, fontWeight: 500 }}>{strategy.production[i]}</td>
-                              {strategy.overtime && (<td style={{ ...tdStyle('right'), color: strategy.overtime[i] > 0 ? T.warn : T.inkGhost }}>{strategy.overtime[i]}</td>)}
-                              {strategy.subcontract && (<td style={{ ...tdStyle('right'), color: strategy.subcontract[i] > 0 ? T.risk : T.inkGhost }}>{strategy.subcontract[i]}</td>)}
-                              <td style={{ ...tdStyle('right'), color: strategy.endingInventory[i] < 0 ? T.risk : T.ink, fontWeight: strategy.endingInventory[i] < 0 ? 600 : 400 }}>{strategy.endingInventory[i]}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    {strategy.costBreakdown && (
-                      <div style={{ display: 'flex', gap: 16, padding: '16px 20px', flexWrap: 'wrap' }}>
-                        {Object.entries(strategy.costBreakdown).map(([k, v]) => (
-                          <div key={k} style={{ background: T.bgDark, borderRadius: 6, padding: '8px 14px' }}>
-                            <div style={{ fontFamily: 'JetBrains Mono', fontSize: 8, color: T.inkLight, letterSpacing: 1, textTransform: 'uppercase' }}>{k.replace(/([A-Z])/g, ' $1').trim()}</div>
-                            <div style={{ fontFamily: 'Sora', fontSize: 16, fontWeight: 600, color: v > 0 ? T.ink : T.inkGhost }}>${Math.round(v).toLocaleString()}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </Card>
-                )}
-              </>
-            ) : (
-              <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>No data</div>
-            )}
-          </>
-        )}
+        {loading && <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>Loading production plans...</div>}
 
-        {/* ─── Production Plan (PSI) Tab ────────────────────────── */}
-        {tab === 'psi' && (
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* ─── TAB: Production Plan ─────────────────────────────────────── */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {tab === 'plan' && !loading && (
           <>
-            {strategy ? (
-              <>
-                <Card title={`Production Plan \u2014 ${selectedSku || '...'} (${selectedStrategy})`}>
-                  <div style={{ padding: '16px 20px' }}>
-                    <PSIChart periods={rawData?.periods} demand={selectedResult?.plantGrossReqs} production={strategy.production} beginningInventory={BEGINNING_INVENTORY[selectedSku] || 0} endingInventory={strategy.endingInventory} />
-                  </div>
-                </Card>
-                <Card title="Production, Sales & Inventory" style={{ marginTop: 16 }}>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'JetBrains Mono' }}>
-                      <thead>
-                        <tr style={{ borderBottom: `2px solid ${T.border}` }}>
-                          <th scope="col" style={thStyle('left')}>Metric</th>
-                          {rawData?.periods.map((p) => {
-                            const isLocked = !!lockedPeriods[p];
-                            return (
-                              <th key={p} scope="col" style={{ ...thStyle('right'), background: isLocked ? T.bgDeep : 'transparent' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-                                  <button onClick={() => toggleLockPeriod(p)} title={isLocked ? 'Unlock period (allow cascade changes)' : 'Lock period (confirm plan)'}
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', fontSize: 11, lineHeight: 1, color: isLocked ? T.ink : T.inkGhost }}
-                                  >{isLocked ? '\u{1F512}' : '\u{1F513}'}</button>
-                                  <span>{p}</span>
-                                </div>
-                              </th>
-                            );
-                          })}
-                          <th scope="col" style={thStyle('right')}>Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr style={{ borderBottom: `1px solid ${T.border}`, background: T.bgDark }}>
-                          <td style={{ ...tdStyle(), fontSize: 10, color: T.inkLight, fontWeight: 500 }}>Working Days</td>
-                          {rawData?.periods.map((p) => (
-                            <td key={p} style={{ ...tdStyle('right'), fontSize: 10, color: T.inkLight, background: lockedPeriods[p] ? T.bgDeep : 'transparent' }}>5 days</td>
-                          ))}
-                          <td style={{ ...tdStyle('right'), fontSize: 10, color: T.inkLight }}></td>
-                        </tr>
-                        <tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                          <td style={tdStyle()}>Beginning Inventory</td>
-                          {rawData?.periods.map((p, i) => {
-                            const bi = i === 0 ? (BEGINNING_INVENTORY[selectedSku] || 0) : strategy.endingInventory[i - 1];
-                            return (<td key={p} style={{ ...tdStyle('right'), background: lockedPeriods[p] ? T.bgDeep : 'transparent' }}>{bi}</td>);
-                          })}
-                          <td style={tdStyle('right')}></td>
-                        </tr>
-                        <tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                          <td style={{ ...tdStyle(), color: T.accent, fontWeight: 500 }}>Production</td>
-                          {rawData?.periods.map((p, i) => {
-                            const isLocked = !!lockedPeriods[p];
-                            const cellKey = `${selectedSku}-${i}`;
-                            const isEdited = editedCells[cellKey] !== undefined;
-                            const originalValue = strategy.production[i];
-                            const displayValue = isEdited ? editedCells[cellKey] : originalValue;
-                            const isEditingThis = editingCell === cellKey;
-                            return (
-                              <td key={p} onClick={() => { if (!isLocked) setEditingCell(cellKey); }}
-                                style={{ ...tdStyle('right'), color: T.accent, fontWeight: 500, background: isEdited ? '#E8F0FE' : isLocked ? T.bgDeep : 'transparent', cursor: isLocked ? 'default' : 'pointer', padding: isEdited ? '2px 10px 6px' : '6px 10px' }}>
-                                {isEditingThis ? (
-                                  <input type="number" autoFocus defaultValue={displayValue}
-                                    onBlur={(e) => handleCellEdit(i, e.target.value)}
-                                    onKeyDown={(e) => { if (e.key === 'Enter') handleCellEdit(i, e.target.value); if (e.key === 'Escape') setEditingCell(null); }}
-                                    style={{ width: '100%', border: `1px solid ${T.accent}`, borderRadius: 3, padding: '2px 4px', fontSize: 12, fontFamily: 'JetBrains Mono', textAlign: 'right', background: '#fff', color: T.accent, outline: 'none' }} />
-                                ) : (
-                                  <>
-                                    {isEdited && (<div style={{ fontSize: 9, color: T.inkGhost, textDecoration: 'line-through', lineHeight: 1, marginBottom: 1 }}>{originalValue}</div>)}
-                                    {displayValue}
-                                  </>
-                                )}
-                              </td>
-                            );
-                          })}
-                          <td style={{ ...tdStyle('right'), color: T.accent, fontWeight: 500 }}>
-                            {rawData?.periods.map((_, i) => { const ck = `${selectedSku}-${i}`; return editedCells[ck] !== undefined ? editedCells[ck] : strategy.production[i]; }).reduce((s, v) => s + v, 0).toLocaleString()}
-                          </td>
-                        </tr>
-                        <tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                          <td style={tdStyle()}>Sales (Demand)</td>
-                          {rawData?.periods.map((p, i) => (
-                            <td key={p} style={{ ...tdStyle('right'), background: lockedPeriods[p] ? T.bgDeep : 'transparent' }}>{selectedResult.plantGrossReqs[i]}</td>
-                          ))}
-                          <td style={tdStyle('right')}>{selectedResult.plantGrossReqs.reduce((s, v) => s + v, 0).toLocaleString()}</td>
-                        </tr>
-                        <tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                          <td style={tdStyle()}>Ending Inventory</td>
-                          {rawData?.periods.map((p, i) => {
-                            const ei = strategy.endingInventory[i];
-                            return (<td key={p} style={{ ...tdStyle('right'), color: ei < 0 ? T.risk : ei < 50 ? T.warn : T.ink, fontWeight: ei < 0 ? 600 : 400, background: lockedPeriods[p] ? T.bgDeep : 'transparent' }}>{ei}</td>);
-                          })}
-                          <td style={tdStyle('right')}></td>
-                        </tr>
-                        <tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                          <td style={tdStyle()}>Workforce</td>
-                          {rawData?.periods.map((p, i) => (
-                            <td key={p} style={{ ...tdStyle('right'), background: lockedPeriods[p] ? T.bgDeep : 'transparent' }}>{strategy.workforce?.[i] ?? '\u2014'}</td>
-                          ))}
-                          <td style={tdStyle('right')}></td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </Card>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 16 }}>
-                  {['chase', 'level', 'hybrid'].map(s => {
-                    const st = plan?.strategies?.[s];
-                    if (!st) return null;
-                    const avgInv = Math.round(st.endingInventory.reduce((a, v) => a + v, 0) / st.endingInventory.length);
-                    const maxWf = st.workforce ? Math.max(...st.workforce) : '\u2014';
-                    return (
-                      <div key={s} onClick={() => setSelectedStrategy(s)}
-                        style={{ background: selectedStrategy === s ? T.ink : T.white, border: `1px solid ${selectedStrategy === s ? T.ink : T.border}`, borderRadius: 8, padding: '14px 16px', cursor: 'pointer', transition: 'all 0.15s' }}>
-                        <div style={{ fontFamily: 'Sora', fontSize: 13, fontWeight: 600, color: selectedStrategy === s ? T.white : T.ink, textTransform: 'capitalize', marginBottom: 10 }}>{s}</div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                          {[
-                            { label: 'Total Cost', value: `$${(st.totalCost || 0).toLocaleString()}` },
-                            { label: 'Average Inventory', value: avgInv },
-                            { label: 'Max Workforce', value: maxWf },
-                          ].map(m => (
-                            <div key={m.label}>
-                              <div style={{ fontFamily: 'JetBrains Mono', fontSize: 8, color: selectedStrategy === s ? 'rgba(255,255,255,0.5)' : T.inkLight, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 2 }}>{m.label}</div>
-                              <div style={{ fontFamily: 'JetBrains Mono', fontSize: 14, fontWeight: 600, color: selectedStrategy === s ? T.white : T.accent }}>{m.value}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            ) : (
-              <Card><div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>Select a strategy to see production plan</div></Card>
-            )}
-          </>
-        )}
-
-        {/* ─── Capacity Utilization Tab ─────────────────────────── */}
-        {tab === 'capacity' && (
-          <Card title={`Rough-Cut Capacity \u2014 ${selectedSku || '...'} (${selectedStrategy})`}>
-            {strategy?.rccp ? (
-              <div style={{ padding: '16px 20px' }}>
-                {strategy.rccp.map(wc => {
-                  const ratePerHour = wc.hoursPerUnit > 0 ? Math.round(1 / wc.hoursPerUnit) : 0;
-                  const dailyCapacity = ratePerHour * 8;
+            {/* Strategy selector cards */}
+            {currentFamilyPlan?.plan?.strategies && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
+                {['chase', 'level', 'hybrid'].map(s => {
+                  const st = currentFamilyPlan.plan.strategies[s];
+                  if (!st) return null;
+                  const isRec = currentFamilyPlan.plan.recommended === s;
+                  const excCount = (st.exceptions || []).length;
                   return (
-                    <div key={wc.code} style={{ marginBottom: 24 }}>
-                      <div style={{ fontFamily: 'Sora', fontSize: 13, fontWeight: 600, color: T.ink, marginBottom: 4 }}>
-                        {WC_NAMES[wc.code] || wc.code}
-                        <span style={{ marginLeft: 8, fontSize: 10, color: T.inkLight, fontWeight: 400, fontFamily: 'JetBrains Mono' }}>({wc.code})</span>
+                    <div key={s} onClick={() => setSelectedStrategy(s)}
+                      style={{
+                        background: selectedStrategy === s ? T.ink : T.white,
+                        border: `2px solid ${isRec ? T.safe : selectedStrategy === s ? T.ink : T.border}`,
+                        borderRadius: 10, padding: '16px 18px', cursor: 'pointer', transition: 'all 0.15s',
+                      }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <span style={{ fontFamily: 'Sora', fontSize: 14, fontWeight: 600, color: selectedStrategy === s ? T.white : T.ink, textTransform: 'capitalize' }}>{s}</span>
+                        {isRec && <span style={{ background: T.safeBg, color: T.safe, border: `1px solid ${T.safe}`, padding: '1px 7px', borderRadius: 4, fontSize: 9, fontWeight: 600 }}>REC</span>}
                       </div>
-                      <div style={{ display: 'flex', gap: 16, marginBottom: 8, flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 11, color: T.inkMid, fontFamily: 'JetBrains Mono' }}>Rate: {ratePerHour} units/hour</span>
-                        <span style={{ fontSize: 11, color: T.inkMid, fontFamily: 'JetBrains Mono' }}>Daily Capacity: {dailyCapacity} units</span>
-                        <span style={{ fontSize: 11, color: T.inkLight, fontFamily: 'JetBrains Mono' }}>{wc.capacityHoursPerPeriod} hours capacity/period</span>
+                      <div style={{ fontFamily: 'Sora', fontSize: 22, fontWeight: 600, color: selectedStrategy === s ? T.white : T.modProduction, marginBottom: 4 }}>
+                        ${Math.round(st.totalCost || 0).toLocaleString()}
                       </div>
-                      <CapacityChart periods={rawData?.periods} loadHours={wc.loadHours} capacity={wc.capacityHoursPerPeriod} utilization={wc.utilization} overloaded={wc.overloaded} />
+                      <div style={{ fontSize: 11, color: selectedStrategy === s ? 'rgba(255,255,255,0.6)' : T.inkLight }}>
+                        {s === 'chase' && 'Match demand. Variable workforce.'}
+                        {s === 'level' && 'Constant rate. Inventory buffers.'}
+                        {s === 'hybrid' && 'Base + overtime for peaks.'}
+                      </div>
+                      {excCount > 0 && (
+                        <div style={{ marginTop: 6, fontSize: 10, color: selectedStrategy === s ? '#FFB4B4' : T.risk, fontWeight: 500 }}>
+                          ⚠ {excCount} exception{excCount > 1 ? 's' : ''}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
-            ) : (
-              <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>No capacity data for this strategy</div>
             )}
-          </Card>
+
+            {/* PSI Table */}
+            {strategy && (
+              <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 10, overflow: 'hidden', marginBottom: 20 }}>
+                <div style={{ padding: '14px 20px', borderBottom: `1px solid ${T.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontFamily: 'Sora', fontSize: 14, fontWeight: 600, color: T.ink }}>
+                    Production Plan — {currentFamilyPlan?.familyName || selectedFamily}
+                    <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 400, color: T.inkLight }}>({selectedStrategy})</span>
+                  </div>
+                  <div style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkLight }}>
+                    Click 🔒 to firm periods
+                  </div>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: `2px solid ${T.border}` }}>
+                        <th style={thStyle('left')}>Metric</th>
+                        {periods.map((p, i) => {
+                          const isFirmed = firmedPeriods.has(i);
+                          return (
+                            <th key={p} style={{ ...thStyle('right'), background: isFirmed ? '#E8F5E9' : 'transparent' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
+                                <button onClick={(e) => { e.stopPropagation(); handleFirmPeriod(i); }}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 10, lineHeight: 1, color: isFirmed ? T.safe : T.inkGhost }}
+                                  title={isFirmed ? 'Unfirm period' : 'Firm period'}>
+                                  {isFirmed ? '🔒' : '🔓'}
+                                </button>
+                                <span>{typeof p === 'string' && p.length > 5 ? `W${i + 1}` : p}</span>
+                              </div>
+                            </th>
+                          );
+                        })}
+                        <th style={thStyle('right')}>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {/* Gross Requirements */}
+                      <tr style={{ borderBottom: `1px solid ${T.border}` }}>
+                        <td style={tdStyle()}>Gross Requirements</td>
+                        {periods.map((p, i) => (
+                          <td key={p} style={{ ...tdStyle('right'), background: firmedPeriods.has(i) ? '#E8F5E9' : 'transparent' }}>
+                            {grossReqs[i]?.toLocaleString()}
+                          </td>
+                        ))}
+                        <td style={{ ...tdStyle('right'), fontWeight: 500 }}>{grossReqs.reduce((s, v) => s + (v || 0), 0).toLocaleString()}</td>
+                      </tr>
+
+                      {/* Production */}
+                      <tr style={{ borderBottom: `1px solid ${T.border}` }}>
+                        <td style={{ ...tdStyle(), color: T.modProduction, fontWeight: 500 }}>Production</td>
+                        {periods.map((p, i) => (
+                          <td key={p} style={{ ...tdStyle('right'), color: T.modProduction, fontWeight: 500, background: firmedPeriods.has(i) ? '#E8F5E9' : 'transparent' }}>
+                            {strategy.production[i]?.toLocaleString()}
+                          </td>
+                        ))}
+                        <td style={{ ...tdStyle('right'), color: T.modProduction, fontWeight: 600 }}>
+                          {strategy.production.reduce((s, v) => s + (v || 0), 0).toLocaleString()}
+                        </td>
+                      </tr>
+
+                      {/* Overtime (hybrid only) */}
+                      {strategy.overtime && (
+                        <tr style={{ borderBottom: `1px solid ${T.border}`, background: T.bgDark }}>
+                          <td style={{ ...tdStyle(), fontSize: 11 }}>↳ Overtime</td>
+                          {periods.map((p, i) => (
+                            <td key={p} style={{ ...tdStyle('right'), fontSize: 11, color: strategy.overtime[i] > 0 ? T.warn : T.inkGhost }}>
+                              {strategy.overtime[i] || '—'}
+                            </td>
+                          ))}
+                          <td style={{ ...tdStyle('right'), fontSize: 11 }}>{strategy.overtime.reduce((s, v) => s + (v || 0), 0)}</td>
+                        </tr>
+                      )}
+
+                      {/* Subcontract (hybrid only) */}
+                      {strategy.subcontract && strategy.subcontract.some(v => v > 0) && (
+                        <tr style={{ borderBottom: `1px solid ${T.border}`, background: T.bgDark }}>
+                          <td style={{ ...tdStyle(), fontSize: 11 }}>↳ Subcontract</td>
+                          {periods.map((p, i) => (
+                            <td key={p} style={{ ...tdStyle('right'), fontSize: 11, color: strategy.subcontract[i] > 0 ? T.risk : T.inkGhost }}>
+                              {strategy.subcontract[i] || '—'}
+                            </td>
+                          ))}
+                          <td style={{ ...tdStyle('right'), fontSize: 11, color: T.risk }}>{strategy.subcontract.reduce((s, v) => s + (v || 0), 0)}</td>
+                        </tr>
+                      )}
+
+                      {/* Ending Inventory */}
+                      <tr style={{ borderBottom: `1px solid ${T.border}` }}>
+                        <td style={tdStyle()}>Ending Inventory</td>
+                        {periods.map((p, i) => {
+                          const ei = strategy.endingInventory[i];
+                          const isNeg = ei < 0;
+                          const isLow = ei >= 0 && ei < 50;
+                          return (
+                            <td key={p} style={{
+                              ...tdStyle('right'),
+                              color: isNeg ? T.risk : isLow ? T.warn : T.ink,
+                              fontWeight: isNeg ? 600 : 400,
+                              background: isNeg ? T.riskBg : firmedPeriods.has(i) ? '#E8F5E9' : 'transparent',
+                            }}>
+                              {ei?.toLocaleString()}
+                              {isNeg && <span style={{ marginLeft: 2, fontSize: 9 }}>⚠</span>}
+                            </td>
+                          );
+                        })}
+                        <td style={tdStyle('right')}></td>
+                      </tr>
+
+                      {/* Cost */}
+                      {strategy.costBreakdown && (
+                        <tr style={{ borderBottom: `1px solid ${T.border}`, background: T.bgDark }}>
+                          <td colSpan={periods.length + 2} style={{ padding: '10px 10px' }}>
+                            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                              {Object.entries(strategy.costBreakdown).map(([k, v]) => (
+                                <div key={k} style={{ fontFamily: 'JetBrains Mono', fontSize: 11 }}>
+                                  <span style={{ color: T.inkLight, fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                                    {k.replace(/([A-Z])/g, ' $1').trim()}
+                                  </span>
+                                  <span style={{ marginLeft: 6, color: v > 0 ? T.ink : T.inkGhost, fontWeight: 500 }}>
+                                    ${Math.round(v).toLocaleString()}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* ─── Exception Management Panel ─── */}
+            <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 10, overflow: 'hidden' }}>
+              <div style={{ padding: '14px 20px', borderBottom: `1px solid ${T.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontFamily: 'Sora', fontSize: 14, fontWeight: 600, color: T.ink }}>
+                  Exception Management
+                  {critCount > 0 && <span style={{ marginLeft: 8, fontSize: 11, color: T.risk, fontWeight: 500 }}>{critCount} critical</span>}
+                  {warnCount > 0 && <span style={{ marginLeft: 8, fontSize: 11, color: T.warn, fontWeight: 500 }}>{warnCount} warning</span>}
+                </div>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {['all', 'critical', 'warning', 'info'].map(f => (
+                    <button key={f} onClick={() => setExceptionFilter(f)}
+                      style={{
+                        background: exceptionFilter === f ? T.ink : T.white,
+                        color: exceptionFilter === f ? T.white : T.inkMid,
+                        border: `1px solid ${exceptionFilter === f ? T.ink : T.border}`,
+                        borderRadius: 4, padding: '3px 10px', cursor: 'pointer',
+                        fontSize: 10, fontFamily: 'JetBrains Mono', textTransform: 'uppercase', fontWeight: 500,
+                      }}>
+                      {f}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+                {exceptions.length === 0 ? (
+                  <div style={{ padding: 30, textAlign: 'center', color: T.inkLight, fontSize: 13 }}>No exceptions</div>
+                ) : (
+                  exceptions.map(exc => {
+                    const isExpanded = expandedExceptions.has(exc.id);
+                    return (
+                      <div key={exc.id} style={{
+                        borderBottom: `1px solid ${T.border}`,
+                        background: exc.status === 'resolved' ? T.bgDark : exc.severity === 'critical' ? T.riskBg : 'transparent',
+                        opacity: exc.status === 'resolved' ? 0.6 : 1,
+                      }}>
+                        <div
+                          onClick={() => setExpandedExceptions(prev => {
+                            const next = new Set(prev);
+                            isExpanded ? next.delete(exc.id) : next.add(exc.id);
+                            return next;
+                          })}
+                          style={{ padding: '10px 20px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}>
+                          {/* Severity dot */}
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: SEV[exc.severity], flexShrink: 0 }} />
+
+                          {/* ID */}
+                          <span style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: T.inkLight, minWidth: 60 }}>{exc.id}</span>
+
+                          {/* Type badge */}
+                          <span style={{
+                            fontFamily: 'JetBrains Mono', fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.5,
+                            padding: '1px 6px', borderRadius: 3, fontWeight: 500,
+                            background: SEV_BG[exc.severity], color: SEV[exc.severity],
+                            border: `1px solid ${SEV[exc.severity]}20`,
+                          }}>
+                            {exc.type}
+                          </span>
+
+                          {/* Message */}
+                          <span style={{ fontSize: 12, color: T.ink, flex: 1 }}>{exc.message}</span>
+
+                          {/* Status */}
+                          <span style={{
+                            fontSize: 9, fontFamily: 'JetBrains Mono', textTransform: 'uppercase',
+                            color: exc.status === 'open' ? T.risk : exc.status === 'acknowledged' ? T.warn : T.safe,
+                            fontWeight: 600, letterSpacing: 0.5,
+                          }}>
+                            {exc.status}
+                          </span>
+
+                          {/* Expand arrow */}
+                          <span style={{ color: T.inkGhost, fontSize: 11 }}>{isExpanded ? '▾' : '▸'}</span>
+                        </div>
+
+                        {/* Expanded detail */}
+                        {isExpanded && (
+                          <div style={{ padding: '0 20px 14px 40px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 10 }}>
+                              {exc.plant && (
+                                <div>
+                                  <div style={{ fontSize: 9, color: T.inkLight, fontFamily: 'JetBrains Mono', textTransform: 'uppercase', letterSpacing: 0.8 }}>Plant</div>
+                                  <div style={{ fontSize: 12, color: T.ink }}>{exc.plant}</div>
+                                </div>
+                              )}
+                              {exc.familyId && (
+                                <div>
+                                  <div style={{ fontSize: 9, color: T.inkLight, fontFamily: 'JetBrains Mono', textTransform: 'uppercase', letterSpacing: 0.8 }}>Family</div>
+                                  <div style={{ fontSize: 12, color: T.ink }}>{exc.familyId}</div>
+                                </div>
+                              )}
+                              {exc.period && (
+                                <div>
+                                  <div style={{ fontSize: 9, color: T.inkLight, fontFamily: 'JetBrains Mono', textTransform: 'uppercase', letterSpacing: 0.8 }}>Period</div>
+                                  <div style={{ fontSize: 12, color: T.ink }}>{exc.period}</div>
+                                </div>
+                              )}
+                            </div>
+
+                            {exc.recommendation && (
+                              <div style={{ background: T.bgDark, borderRadius: 6, padding: '8px 12px', marginBottom: 10, fontSize: 12, color: T.inkMid, lineHeight: 1.5 }}>
+                                <span style={{ fontWeight: 500, color: T.ink }}>Recommendation: </span>
+                                {exc.recommendation}
+                              </div>
+                            )}
+
+                            {exc.status !== 'resolved' && (
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                {exc.status === 'open' && (
+                                  <button onClick={(e) => { e.stopPropagation(); handleAcknowledge(exc.id); }}
+                                    style={{ background: T.warnBg, color: T.warn, border: `1px solid ${T.warnBorder}`, borderRadius: 5, padding: '4px 12px', cursor: 'pointer', fontSize: 11, fontWeight: 500 }}>
+                                    Acknowledge
+                                  </button>
+                                )}
+                                <button onClick={(e) => { e.stopPropagation(); handleResolve(exc.id, 'Accepted recommendation'); }}
+                                  style={{ background: T.safeBg, color: T.safe, border: `1px solid ${T.safe}`, borderRadius: 5, padding: '4px 12px', cursor: 'pointer', fontSize: 11, fontWeight: 500 }}>
+                                  Resolve
+                                </button>
+                              </div>
+                            )}
+
+                            {exc.status === 'resolved' && exc.resolution && (
+                              <div style={{ fontSize: 11, color: T.safe, fontFamily: 'JetBrains Mono' }}>
+                                ✓ {exc.resolution}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* ─── TAB: RCCP (Rough-Cut Capacity Planning) ─────────────────── */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {tab === 'rccp' && !loading && (
+          <>
+            {/* Aggregate RCCP for selected plant */}
+            {currentPlant && (
+              <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 10, overflow: 'hidden', marginBottom: 20 }}>
+                <div style={{ padding: '14px 20px', borderBottom: `1px solid ${T.border}` }}>
+                  <div style={{ fontFamily: 'Sora', fontSize: 14, fontWeight: 600, color: T.ink }}>
+                    Capacity Feasibility — {currentPlant.plantName}
+                  </div>
+                  <div style={{ fontSize: 11, color: T.inkMid, marginTop: 2 }}>
+                    Aggregate load across all product families for the selected strategy
+                  </div>
+                </div>
+
+                {/* Per work-center capacity bars */}
+                {currentFamilyPlan?.plan?.strategies?.[selectedStrategy]?.rccp?.map(wc => (
+                  <WorkCenterCapacity key={wc.code} wc={wc} periods={periods} />
+                ))}
+
+                {!currentFamilyPlan?.plan?.strategies?.[selectedStrategy]?.rccp?.length && (
+                  <div style={{ padding: 30, textAlign: 'center', color: T.inkLight }}>No RCCP data for this family/strategy</div>
+                )}
+              </div>
+            )}
+
+            {/* Strategy RCCP comparison */}
+            {currentFamilyPlan?.plan?.strategies && (
+              <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 10, overflow: 'hidden' }}>
+                <div style={{ padding: '14px 20px', borderBottom: `1px solid ${T.border}` }}>
+                  <div style={{ fontFamily: 'Sora', fontSize: 14, fontWeight: 600, color: T.ink }}>
+                    Strategy Capacity Comparison — {currentFamilyPlan.familyName}
+                  </div>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: `2px solid ${T.border}` }}>
+                        <th style={thStyle('left')}>Work Center</th>
+                        <th style={thStyle('center')}>Chase Peak %</th>
+                        <th style={thStyle('center')}>Level Peak %</th>
+                        <th style={thStyle('center')}>Hybrid Peak %</th>
+                        <th style={thStyle('center')}>Capacity/Period</th>
+                        <th style={thStyle('center')}>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(currentFamilyPlan.plan.strategies.chase?.rccp || []).map((wc, idx) => {
+                        const chaseMax = Math.max(...(wc.utilization || [0]));
+                        const levelMax = Math.max(...(currentFamilyPlan.plan.strategies.level?.rccp?.[idx]?.utilization || [0]));
+                        const hybridMax = Math.max(...(currentFamilyPlan.plan.strategies.hybrid?.rccp?.[idx]?.utilization || [0]));
+                        const worstCase = Math.max(chaseMax, levelMax, hybridMax);
+                        return (
+                          <tr key={wc.code} style={{ borderBottom: `1px solid ${T.border}` }}>
+                            <td style={tdStyle()}>
+                              <div style={{ fontWeight: 500, color: T.ink }}>{wc.code}</div>
+                              <div style={{ fontSize: 10, color: T.inkLight }}>{wc.capacityHoursPerPeriod}h capacity</div>
+                            </td>
+                            <td style={{ ...tdStyle('center'), color: chaseMax > 100 ? T.risk : chaseMax > 85 ? T.warn : T.safe }}>{chaseMax.toFixed(0)}%</td>
+                            <td style={{ ...tdStyle('center'), color: levelMax > 100 ? T.risk : levelMax > 85 ? T.warn : T.safe }}>{levelMax.toFixed(0)}%</td>
+                            <td style={{ ...tdStyle('center'), color: hybridMax > 100 ? T.risk : hybridMax > 85 ? T.warn : T.safe }}>{hybridMax.toFixed(0)}%</td>
+                            <td style={{ ...tdStyle('center'), color: T.inkLight }}>{wc.capacityHoursPerPeriod}h</td>
+                            <td style={tdStyle('center')}>
+                              <span style={{
+                                padding: '2px 8px', borderRadius: 4, fontSize: 9, fontWeight: 600,
+                                fontFamily: 'JetBrains Mono', textTransform: 'uppercase',
+                                background: worstCase > 100 ? T.riskBg : worstCase > 85 ? T.warnBg : T.safeBg,
+                                color: worstCase > 100 ? T.risk : worstCase > 85 ? T.warn : T.safe,
+                              }}>
+                                {worstCase > 100 ? 'OVERLOADED' : worstCase > 85 ? 'NEAR LIMIT' : 'FEASIBLE'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* ─── TAB: Inputs (Calendars + Rates) ─────────────────────────── */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {tab === 'inputs' && (
+          <>
+            {/* Plant Calendars */}
+            <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 10, overflow: 'hidden', marginBottom: 20 }}>
+              <div style={{ padding: '14px 20px', borderBottom: `1px solid ${T.border}` }}>
+                <div style={{ fontFamily: 'Sora', fontSize: 14, fontWeight: 600, color: T.ink }}>Production Calendars</div>
+                <div style={{ fontSize: 11, color: T.inkMid, marginTop: 2 }}>Working days, shifts, and available hours per plant</div>
+              </div>
+              {calendars?.calendars ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 16, padding: 20 }}>
+                  {Object.entries(calendars.calendars).map(([plantCode, cal]) => (
+                    <div key={plantCode} style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: 16 }}>
+                      <div style={{ fontFamily: 'Sora', fontSize: 13, fontWeight: 600, color: T.ink, marginBottom: 12 }}>
+                        {cal.plantName || plantCode}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        {[
+                          { label: 'Working Days/Week', value: cal.workingDaysPerWeek },
+                          { label: 'Shifts/Day', value: cal.shifts },
+                          { label: 'Hours/Shift', value: cal.hoursPerShift },
+                          { label: 'Effective Hrs/Week', value: cal.effectiveHoursPerWeek, highlight: true },
+                        ].map(item => (
+                          <div key={item.label} style={{ background: item.highlight ? T.bgDark : 'transparent', borderRadius: 5, padding: '6px 10px' }}>
+                            <div style={{ fontFamily: 'JetBrains Mono', fontSize: 8, color: T.inkLight, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 }}>{item.label}</div>
+                            <div style={{ fontFamily: 'JetBrains Mono', fontSize: 16, fontWeight: 600, color: item.highlight ? T.modProduction : T.ink }}>{item.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {cal.overtimeAvailable && (
+                        <div style={{ marginTop: 8, fontSize: 11, color: T.warn, fontFamily: 'JetBrains Mono' }}>
+                          ⚡ Overtime available: {cal.overtimeNotes || 'Saturday shifts'}
+                        </div>
+                      )}
+                      {cal.holidays?.length > 0 && (
+                        <div style={{ marginTop: 6, fontSize: 10, color: T.inkLight }}>
+                          Upcoming holidays: {cal.holidays.join(', ')}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ padding: 30, textAlign: 'center', color: T.inkLight }}>Loading calendars...</div>
+              )}
+            </div>
+
+            {/* Production Rates */}
+            <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 10, overflow: 'hidden' }}>
+              <div style={{ padding: '14px 20px', borderBottom: `1px solid ${T.border}` }}>
+                <div style={{ fontFamily: 'Sora', fontSize: 14, fontWeight: 600, color: T.ink }}>Production Rates</div>
+                <div style={{ fontSize: 11, color: T.inkMid, marginTop: 2 }}>Units per hour, setup times, and run constraints by product family</div>
+              </div>
+              {rates?.rates ? (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: `2px solid ${T.border}` }}>
+                        <th style={thStyle('left')}>Plant</th>
+                        <th style={thStyle('left')}>Family</th>
+                        <th style={thStyle('right')}>Units/Hour</th>
+                        <th style={thStyle('right')}>Setup (hrs)</th>
+                        <th style={thStyle('right')}>Changeover (hrs)</th>
+                        <th style={thStyle('right')}>Min Run</th>
+                        <th style={thStyle('right')}>Max Run</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rates.rates.map((r, i) => (
+                        <tr key={i} style={{ borderBottom: `1px solid ${T.border}` }}>
+                          <td style={tdStyle()}>{r.plantCode}</td>
+                          <td style={{ ...tdStyle(), fontWeight: 500, color: T.ink }}>{r.familyName || r.familyId}</td>
+                          <td style={{ ...tdStyle('right'), color: T.modProduction, fontWeight: 500 }}>{r.unitsPerHour}</td>
+                          <td style={tdStyle('right')}>{r.setupTimeHrs}</td>
+                          <td style={tdStyle('right')}>{r.changeoverTimeHrs}</td>
+                          <td style={tdStyle('right')}>{r.minRunSize?.toLocaleString()}</td>
+                          <td style={tdStyle('right')}>{r.maxRunSize?.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div style={{ padding: 30, textAlign: 'center', color: T.inkLight }}>Loading rates...</div>
+              )}
+            </div>
+
+            {/* Supply-Demand Match Heuristics */}
+            <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 10, overflow: 'hidden', marginTop: 20 }}>
+              <div style={{ padding: '14px 20px', borderBottom: `1px solid ${T.border}` }}>
+                <div style={{ fontFamily: 'Sora', fontSize: 14, fontWeight: 600, color: T.ink }}>Supply-Demand Match Heuristics</div>
+                <div style={{ fontSize: 11, color: T.inkMid, marginTop: 2 }}>
+                  Configurable policies that drive how production plans balance supply against demand
+                </div>
+              </div>
+              {heuristics?.heuristics ? (
+                <div style={{ padding: 20 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
+
+                    {/* Lot Sizing Policy */}
+                    <HeuristicCard
+                      title="Lot Sizing Policy"
+                      description="How production quantities are determined relative to net requirements"
+                      current={heuristics.heuristics.lotSizing}
+                      options={[
+                        { value: 'LFL', label: 'Lot-for-Lot', desc: 'Produce exactly what is needed. Minimizes inventory.' },
+                        { value: 'FOQ', label: 'Fixed Order Qty', desc: 'Always produce in fixed batch sizes. Reduces setups.' },
+                        { value: 'POQ', label: 'Period Order Qty', desc: 'Cover N periods of demand in each run.' },
+                        { value: 'EOQ', label: 'Economic Order Qty', desc: 'Balance setup cost vs carrying cost (Wilson formula).' },
+                      ]}
+                      onUpdate={(val) => updateHeuristic('lotSizing', val)}
+                    />
+
+                    {/* Safety Stock Policy */}
+                    <HeuristicCard
+                      title="Safety Stock Policy"
+                      description="Buffer inventory to protect against demand variability and supply disruption"
+                      current={heuristics.heuristics.safetyStock}
+                      options={[
+                        { value: 'fixed', label: 'Fixed Units', desc: 'Maintain a constant safety stock quantity.' },
+                        { value: 'wos', label: 'Weeks of Supply', desc: 'Safety stock = N weeks of average demand.' },
+                        { value: 'service', label: 'Service Level %', desc: 'Statistically determined from demand variability.' },
+                        { value: 'dynamic', label: 'Dynamic', desc: 'Varies by season — higher in peak, lower in trough.' },
+                      ]}
+                      onUpdate={(val) => updateHeuristic('safetyStock', val)}
+                    />
+
+                    {/* Time Fence Policy */}
+                    <HeuristicCard
+                      title="Planning Time Fences"
+                      description="Frozen/slushy/liquid zones controlling plan stability vs flexibility"
+                      current={heuristics.heuristics.timeFence}
+                      options={[
+                        { value: 'strict', label: 'Strict (2-4-6)', desc: '2wk frozen, 4wk slushy, 6wk+ liquid.' },
+                        { value: 'moderate', label: 'Moderate (1-3-5)', desc: '1wk frozen, 3wk slushy, 5wk+ liquid.' },
+                        { value: 'flexible', label: 'Flexible (1-2-4)', desc: '1wk frozen, 2wk slushy, 4wk+ liquid.' },
+                        { value: 'agile', label: 'Agile (0-1-3)', desc: 'No frozen zone. Maximum responsiveness.' },
+                      ]}
+                      onUpdate={(val) => updateHeuristic('timeFence', val)}
+                    />
+
+                    {/* Capacity Allocation */}
+                    <HeuristicCard
+                      title="Capacity Allocation Priority"
+                      description="When capacity is constrained, which families get produced first"
+                      current={heuristics.heuristics.capacityPriority}
+                      options={[
+                        { value: 'margin', label: 'Highest Margin First', desc: 'Prioritize products with highest contribution margin.' },
+                        { value: 'stockout', label: 'Stockout Risk First', desc: 'Prioritize products closest to stockout.' },
+                        { value: 'customer', label: 'Customer Priority', desc: 'Top customers (Petco, Chewy) get allocation first.' },
+                        { value: 'fifo', label: 'FIFO (Demand Date)', desc: 'Earliest demand date gets priority.' },
+                      ]}
+                      onUpdate={(val) => updateHeuristic('capacityPriority', val)}
+                    />
+
+                    {/* Smoothing */}
+                    <HeuristicCard
+                      title="Production Smoothing"
+                      description="Limits on period-to-period production rate changes"
+                      current={heuristics.heuristics.smoothing}
+                      options={[
+                        { value: 'none', label: 'No Smoothing', desc: 'Production can change freely each period.' },
+                        { value: 'light', label: 'Light (±20%)', desc: 'Max 20% change between adjacent periods.' },
+                        { value: 'moderate', label: 'Moderate (±10%)', desc: 'Max 10% change. Stable workforce.' },
+                        { value: 'heavy', label: 'Heavy (±5%)', desc: 'Near-level production. Minimal disruption.' },
+                      ]}
+                      onUpdate={(val) => updateHeuristic('smoothing', val)}
+                    />
+
+                    {/* Inventory Target */}
+                    <HeuristicCard
+                      title="Inventory Target Policy"
+                      description="Desired weeks of supply to maintain at end of each period"
+                      current={heuristics.heuristics.inventoryTarget}
+                      options={[
+                        { value: 'lean', label: 'Lean (1-2 wks)', desc: 'Minimize inventory. Accept higher stockout risk.' },
+                        { value: 'balanced', label: 'Balanced (2-4 wks)', desc: 'Moderate buffer. Standard for most operations.' },
+                        { value: 'conservative', label: 'Conservative (4-6 wks)', desc: 'Large buffer. Low stockout risk, high carrying cost.' },
+                        { value: 'seasonal', label: 'Seasonal Build', desc: 'Build ahead of peak seasons, draw down after.' },
+                      ]}
+                      onUpdate={(val) => updateHeuristic('inventoryTarget', val)}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div style={{ padding: 30, textAlign: 'center', color: T.inkLight }}>Loading heuristics...</div>
+              )}
+            </div>
+          </>
         )}
       </div>
     </ModuleLayout>
   );
 }
 
-function thStyle(align = 'left') {
-  return { textAlign: align, padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 };
-}
+// ─── Work Center Capacity Component ──────────────────────────────────────────
 
-function tdStyle(align = 'left') {
-  return { padding: '6px 10px', textAlign: align, color: T.inkMid };
-}
-
-function PSIChart({ periods, demand, production, beginningInventory, endingInventory }) {
-  if (!periods) return null;
-  const W = 700, H = 260;
-  const M = { top: 20, right: 30, bottom: 50, left: 55 };
-  const iW = W - M.left - M.right;
-  const iH = H - M.top - M.bottom;
-  const invLine = [beginningInventory, ...(endingInventory || [])];
-  const allVals = [...(demand || []), ...(production || []), ...invLine];
-  const maxV = Math.max(...allVals.map(Math.abs), 1) * 1.15;
-  const minV = Math.min(0, ...allVals) * 1.15;
-  const range = maxV - minV || 1;
-  const groupW = iW / periods.length;
-  const barW = groupW * 0.3;
-  const barGap = groupW * 0.04;
-  const yScale = (v) => M.top + iH - ((v - minV) / range) * iH;
+function WorkCenterCapacity({ wc, periods }) {
+  const maxUtil = Math.max(...(wc.utilization || [0]));
+  const hasOverload = wc.overloaded?.some(v => v);
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Production plan chart showing production and demand as grouped bars with inventory line overlay" style={{ width: '100%', maxWidth: W, height: 'auto' }}>
-      <line x1={M.left} y1={yScale(0)} x2={W - M.right} y2={yScale(0)} stroke={T.border} strokeWidth={1} />
-      {[0, Math.round(maxV / 2), Math.round(maxV)].map(v => (
-        <text key={v} x={M.left - 8} y={yScale(v) + 3} textAnchor="end" fontSize={8} fill={T.inkLight} fontFamily="JetBrains Mono">{v}</text>
-      ))}
-      {periods.map((p, i) => {
-        const cx = M.left + i * groupW + groupW / 2;
-        const prodX = cx - barW - barGap / 2;
-        const demX = cx + barGap / 2;
-        const prodH = ((production[i] || 0) / range) * iH;
-        const demH = ((demand[i] || 0) / range) * iH;
-        return (
-          <g key={p}>
-            <rect x={prodX} y={yScale(0) - prodH} width={barW} height={prodH} fill={T.accent} opacity={0.85} rx={2} />
-            <rect x={demX} y={yScale(0) - demH} width={barW} height={demH} fill={T.inkLight} opacity={0.5} rx={2} />
-            <text x={cx} y={H - 28} textAnchor="middle" fontSize={9} fill={T.inkLight} fontFamily="JetBrains Mono">{p}</text>
-          </g>
-        );
-      })}
-      <path d={invLine.map((v, i) => { const px = i === 0 ? M.left : M.left + (i - 0.5) * groupW + groupW / 2; return `${i === 0 ? 'M' : 'L'} ${px} ${yScale(v)}`; }).join(' ')} fill="none" stroke={T.safe} strokeWidth={2.5} />
-      {invLine.map((v, i) => { const px = i === 0 ? M.left : M.left + (i - 0.5) * groupW + groupW / 2; return <circle key={i} cx={px} cy={yScale(v)} r={3.5} fill={T.safe} />; })}
-      <g transform={`translate(${M.left}, ${H - 10})`}>
-        <rect x={0} y={-6} width={10} height={10} fill={T.accent} opacity={0.85} rx={1} />
-        <text x={14} y={3} fontSize={9} fill={T.inkMid} fontFamily="Inter">Production</text>
-        <rect x={90} y={-6} width={10} height={10} fill={T.inkLight} opacity={0.5} rx={1} />
-        <text x={104} y={3} fontSize={9} fill={T.inkMid} fontFamily="Inter">Demand</text>
-        <line x1={180} y1={0} x2={200} y2={0} stroke={T.safe} strokeWidth={2.5} />
-        <circle cx={190} cy={0} r={3} fill={T.safe} />
-        <text x={206} y={3} fontSize={9} fill={T.inkMid} fontFamily="Inter">Inventory</text>
-      </g>
-    </svg>
+    <div style={{ padding: '16px 20px', borderBottom: `1px solid ${T.border}` }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <div>
+          <span style={{ fontFamily: 'Sora', fontSize: 13, fontWeight: 600, color: T.ink }}>{wc.code}</span>
+          <span style={{ marginLeft: 8, fontSize: 10, color: T.inkLight, fontFamily: 'JetBrains Mono' }}>
+            {wc.capacityHoursPerPeriod}h capacity/period · {typeof wc.hoursPerUnit === 'number' ? (wc.hoursPerUnit < 0.01 ? wc.hoursPerUnit.toExponential(1) : wc.hoursPerUnit.toFixed(3)) : wc.hoursPerUnit} hrs/unit
+          </span>
+        </div>
+        <span style={{
+          padding: '2px 8px', borderRadius: 4, fontSize: 9, fontWeight: 600,
+          fontFamily: 'JetBrains Mono', textTransform: 'uppercase',
+          background: hasOverload ? T.riskBg : maxUtil > 85 ? T.warnBg : T.safeBg,
+          color: hasOverload ? T.risk : maxUtil > 85 ? T.warn : T.safe,
+        }}>
+          Peak: {maxUtil.toFixed(0)}%
+        </span>
+      </div>
+
+      {/* Bar chart */}
+      <div style={{ display: 'flex', gap: 3, alignItems: 'flex-end', height: 80 }}>
+        {periods.map((p, i) => {
+          const util = wc.utilization?.[i] || 0;
+          const load = wc.loadHours?.[i] || 0;
+          const cap = wc.capacityHoursPerPeriod;
+          const barH = Math.min(util, 120) / 120 * 70; // cap visual at 120%
+          const isOver = util > 100;
+          const isNear = util > 85;
+          return (
+            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+              <div style={{ fontSize: 8, fontFamily: 'JetBrains Mono', color: isOver ? T.risk : isNear ? T.warn : T.inkLight }}>
+                {util.toFixed(0)}%
+              </div>
+              <div style={{ position: 'relative', width: '100%', height: 70 }}>
+                {/* Capacity line at 100% */}
+                <div style={{ position: 'absolute', bottom: (100 / 120) * 70, left: 0, right: 0, height: 1, background: T.inkGhost, borderStyle: 'dashed' }} />
+                {/* Bar */}
+                <div style={{
+                  position: 'absolute', bottom: 0, left: '15%', right: '15%',
+                  height: barH, borderRadius: '3px 3px 0 0',
+                  background: isOver ? T.risk : isNear ? T.warn : T.safe,
+                  opacity: 0.8, transition: 'height 0.3s',
+                }} />
+              </div>
+              <div style={{ fontSize: 8, fontFamily: 'JetBrains Mono', color: T.inkGhost }}>
+                W{i + 1}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
-function CapacityChart({ periods, loadHours, capacity, utilization, overloaded }) {
-  if (!periods) return null;
-  const W = 700, H = 160;
-  const M = { top: 10, right: 20, bottom: 30, left: 50 };
-  const iW = W - M.left - M.right;
-  const iH = H - M.top - M.bottom;
-  const maxLoad = Math.max(capacity, ...loadHours) * 1.1;
-  const barW = iW / periods.length * 0.6;
-  const gap = iW / periods.length;
+// ─── Heuristic Card Component ────────────────────────────────────────────────
 
+function HeuristicCard({ title, description, current, options, onUpdate }) {
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Capacity utilization bar chart showing load hours versus available capacity" style={{ width: '100%', maxWidth: W, height: 'auto' }}>
-      <line x1={M.left} y1={M.top + iH - (capacity / maxLoad) * iH} x2={W - M.right} y2={M.top + iH - (capacity / maxLoad) * iH} stroke={T.risk} strokeWidth={1} strokeDasharray="6,3" />
-      <text x={W - M.right + 4} y={M.top + iH - (capacity / maxLoad) * iH + 4} fontSize={8} fill={T.risk} fontFamily="JetBrains Mono">Capacity: {capacity}h</text>
-      {periods.map((p, i) => {
-        const bx = M.left + i * gap + (gap - barW) / 2;
-        const bh = (loadHours[i] / maxLoad) * iH;
-        const by = M.top + iH - bh;
-        return (
-          <g key={p}>
-            <rect x={bx} y={by} width={barW} height={bh} fill={overloaded[i] ? T.risk : T.accent} opacity={0.8} rx={2} />
-            <text x={bx + barW / 2} y={by - 4} textAnchor="middle" fontSize={8} fill={overloaded[i] ? T.risk : T.ink} fontFamily="JetBrains Mono" fontWeight={500}>{Math.round(utilization[i])}%</text>
-            <text x={bx + barW / 2} y={H - 6} textAnchor="middle" fontSize={7} fill={T.inkLight} fontFamily="JetBrains Mono">{p.slice(5)}</text>
-          </g>
-        );
-      })}
-    </svg>
+    <div style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: 16 }}>
+      <div style={{ fontFamily: 'Sora', fontSize: 13, fontWeight: 600, color: T.ink, marginBottom: 4 }}>{title}</div>
+      <div style={{ fontSize: 11, color: T.inkMid, marginBottom: 12, lineHeight: 1.4 }}>{description}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {options.map(opt => {
+          const isActive = current === opt.value;
+          return (
+            <div
+              key={opt.value}
+              onClick={() => onUpdate(opt.value)}
+              style={{
+                display: 'flex', alignItems: 'flex-start', gap: 8,
+                padding: '8px 10px', borderRadius: 6, cursor: 'pointer',
+                background: isActive ? T.modProduction + '12' : 'transparent',
+                border: `1.5px solid ${isActive ? T.modProduction : 'transparent'}`,
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = T.bgDark; }}
+              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+            >
+              {/* Radio indicator */}
+              <div style={{
+                width: 14, height: 14, borderRadius: '50%', marginTop: 1, flexShrink: 0,
+                border: `2px solid ${isActive ? T.modProduction : T.inkGhost}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {isActive && <div style={{ width: 7, height: 7, borderRadius: '50%', background: T.modProduction }} />}
+              </div>
+              <div>
+                <div style={{
+                  fontFamily: 'JetBrains Mono', fontSize: 11, fontWeight: isActive ? 600 : 500,
+                  color: isActive ? T.modProduction : T.ink, marginBottom: 1,
+                }}>
+                  {opt.label}
+                </div>
+                <div style={{ fontSize: 10, color: T.inkLight, lineHeight: 1.3 }}>{opt.desc}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

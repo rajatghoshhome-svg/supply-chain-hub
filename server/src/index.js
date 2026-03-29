@@ -21,6 +21,7 @@ import { settingsRouter } from './routes/settings.js';
 import { requestId, errorHandler } from './middleware/error-handler.js';
 import { initialize as initChampionStore } from './data/champion-store.js';
 import { initialize as initDrpStore } from './data/champion-drp-store.js';
+import { initialize as initProductionStore } from './data/champion-production-store.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -55,6 +56,7 @@ app.use(errorHandler);
 // Initialize Champion Pet Foods data stores on startup
 initChampionStore();
 initDrpStore();
+initProductionStore();
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
