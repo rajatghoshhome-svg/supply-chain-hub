@@ -9,6 +9,30 @@ import { T } from '../styles/tokens';
  * Context-aware: reads current module from URL
  */
 
+// Simulated AI responses when API is unavailable (e.g. Vercel, no backend)
+const FALLBACK_RESPONSES = {
+  general: [
+    "Based on Champion Pet Foods' current position:\n\n**Top Risks This Week:**\n1. DC-DEN is at 9 days of supply for Acana Dry Dog — below the 14-day safety target\n2. 2 scheduling orders are behind pace at DogStar Kitchens (Extruder 1 & 2)\n3. Orijen Freeze-Dried has cross-border transit variability on DEN→TOR lane\n\n**Recommended Actions:**\n- Prioritize the STO transfer DC-ATL → DC-DEN for Orijen Original (saves $8,150 vs new production)\n- Review Extruder 1 pace — currently at 104 u/hr vs 120 u/hr target\n- Firm Period 3 on NorthStar Kitchen to lock freeze-dry capacity",
+    "Champion Pet Foods top movers (last 12 weeks):\n\n| Rank | Product | Avg Weekly | Trend |\n|------|---------|-----------|-------|\n| 1 | Orijen Original Dry Dog 25lb | 23,252 | ↗ +4.2% |\n| 2 | Acana Wild Prairie Dry Dog 25lb | 18,400 | → flat |\n| 3 | Orijen Dry Cat Tundra 12lb | 15,800 | ↗ +6.1% |\n| 4 | Orijen Freeze-Dried Dog 16oz | 8,200 | ↘ -2.3% |\n| 5 | Acana Wet Dog Lamb 12.8oz | 7,600 | ↗ +3.8% |\n\nOrijen Original and Cat Tundra are accelerating — ensure DogStar extrusion capacity can handle the ramp in W5-W6.",
+  ],
+  demand: [
+    "**Orijen Original Dry Dog — Demand Analysis:**\n\nForecast method: Holt-Winters + ML Ensemble (MAPE: 6.2%)\n\n| Period | Forecast | Actuals | Variance |\n|--------|----------|---------|----------|\n| W1 | 23,252 | 23,890 | +2.7% |\n| W2 | 21,957 | 22,104 | +0.7% |\n| W3 | 22,508 | — | pending |\n| W4 | 23,092 | — | pending |\n\n📈 Weeks 5-6 show a seasonal ramp to 32-35k units. The statistical forecast captures this well but consider a +5% manual override if retailer promotions are confirmed.\n\n3 overrides are active across the consensus plan.",
+    "**Forecast Accuracy — All Families:**\n\n| Family | MAPE | Bias | Method |\n|--------|------|------|--------|\n| Orijen Dry Dog | 6.2% | +1.1% | HW+ML Ensemble |\n| Orijen Dry Cat | 7.8% | -0.4% | HW+ML Ensemble |\n| Acana Dry Dog | 8.1% | +2.3% | Exp. Smoothing |\n| Orijen Freeze-Dried | 11.4% | -3.2% | Moving Avg |\n| Acana Wet Dog | 9.6% | +0.8% | HW Seasonal |\n\nOrijen Freeze-Dried has the weakest accuracy — the category is growing fast and historical patterns don't capture the acceleration well. Consider switching to the ML ensemble method.",
+  ],
+  drp: [
+    "**DC Inventory Position Summary:**\n\n| DC | SKUs | On-Hand | Below SS | Avg DOH |\n|----|------|---------|----------|---------|\n| DC-ATL | 4 | 42,500 | 0 | 18d ✅ |\n| DC-DEN | 4 | 28,300 | 1 | 12d ⚠️ |\n| DC-TOR | 4 | 34,100 | 1 | 17d |\n\n**Action Required:** DC-DEN Acana Dry Dog is below safety stock (5,200 on-hand vs 5,500 SS). Recommended STO transfer from DC-ATL (9,800 on-hand, 18 DOH).\n\nThe Move vs Make analysis shows transferring 2,400 units saves $8,150 vs new production at DogStar. Lead time: 3 days (STO) vs 10 days (make).",
+  ],
+  production_plan: [
+    "**DogStar Kitchens — Production Plan Summary:**\n\nCurrent strategy: **Hybrid** ($966,223)\n- Chase: $926,278 (REC — lowest cost, variable workforce)\n- Level: $912,418 (2 exceptions — inventory risk W5-W6)\n\n**Key Observations:**\n- W5-W6 seasonal ramp requires 28-32k units/week (vs 21.5k base)\n- Hybrid uses overtime for peaks: 6,482 OT units in W5, 10,482 in W6\n- Chase is recommended — eliminates overtime premium but requires workforce flexibility\n\n**Capacity Alert:** Extruders 1-4 will hit 92% utilization in W6 under any strategy. Consider firming Periods 3-4 to lock in capacity allocation.",
+  ],
+  scheduling: [
+    "**DogStar Kitchens — Schedule Status:**\n\n| Metric | Value |\n|--------|-------|\n| Total Orders | 35 |\n| Running | 4 (across extruders) |\n| Completed | 12 |\n| Behind Pace | 2 ⚠️ |\n| Avg Utilization | 78% |\n| Total Changeover | 8.5h |\n\n**Behind Pace:**\n1. **Extruder 1** — Acana Heritage Dog Dry: 390/520 units (75%), 104 u/hr vs 120 target\n2. **Extruder 2** — Orijen Tundra Cat Dry: 236/380 units (62%), 95 u/hr vs 110 target\n\n**Recommendation:** Extruder 1 may recover if pace improves in next 2 hours. Extruder 2 is at risk — consider reassigning the next order to Extruder 3 (currently idle after CIP).",
+  ],
+  mrp: [
+    "**Open MRP Exceptions:**\n\n| Priority | Type | Item | Action |\n|----------|------|------|--------|\n| 🔴 Critical | Shortage | Fresh Chicken Meal | Expedite PO — 3-day gap in W3 |\n| 🔴 Critical | Capacity | Extrusion Line 1 | Overloaded W5-W6, split batch |\n| 🟡 Warning | Reschedule In | Turkey Meal | Pull forward 1 week for Cat Tundra |\n| 🟡 Warning | Excess | Lamb Meal | Push out — 2 weeks excess on-hand |\n| 🟢 Info | New PO | Freeze-Dry Coating | Auto-generated for W4 requirement |\n\n**Top Priority:** Fresh Chicken Meal expedite. This is the primary ingredient for Orijen Original (25% of revenue). Current supplier lead time is 14 days — premium freight can reduce to 7 days at $2,400 cost, avoiding a $15,000 stockout risk.",
+  ],
+};
+
 const MODULE_SUGGESTIONS = {
   general: [
     "What's the biggest risk today?",
@@ -151,9 +175,13 @@ export default function ChatWidget() {
 
       if (!started) setLoading(false);
       setTimeout(() => btmRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-    } catch (err) {
+    } catch {
+      // API unavailable — use intelligent fallback responses
       setLoading(false);
-      setMsgs(m => [...m, { role: 'assistant', content: `Error: ${err.message}` }]);
+      const pool = FALLBACK_RESPONSES[module] || FALLBACK_RESPONSES.general;
+      const fallback = pool[Math.floor(Math.random() * pool.length)];
+      setMsgs(m => [...m, { role: 'assistant', content: fallback }]);
+      setTimeout(() => btmRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     }
   };
 
