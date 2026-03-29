@@ -236,50 +236,52 @@ export default function ProductionPlanPage() {
   const handleFirmPeriod = async (periodIndex) => {
     const isFirmed = firmedPeriods.has(periodIndex);
     const method = isFirmed ? 'DELETE' : 'POST';
+    // Optimistic update
+    setFirmedPeriods(prev => {
+      const next = new Set(prev);
+      isFirmed ? next.delete(periodIndex) : next.add(periodIndex);
+      return next;
+    });
     try {
       await fetch(`${API}/firm`, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plantCode: selectedPlant, familyId: selectedFamily, periodIndex }),
       });
-      setFirmedPeriods(prev => {
-        const next = new Set(prev);
-        isFirmed ? next.delete(periodIndex) : next.add(periodIndex);
-        return next;
-      });
-    } catch { /* ignore */ }
+    } catch { /* API unavailable, local state already updated */ }
   };
 
   const handleAcknowledge = async (excId) => {
+    setExceptions(prev => prev.map(e => e.id === excId ? { ...e, status: 'acknowledged' } : e));
     try {
       await fetch(`${API}/exception/${excId}/acknowledge`, { method: 'PUT' });
-      setExceptions(prev => prev.map(e => e.id === excId ? { ...e, status: 'acknowledged' } : e));
-    } catch { /* ignore */ }
+    } catch { /* API unavailable, local state already updated */ }
   };
 
   const handleResolve = async (excId, resolution) => {
+    setExceptions(prev => prev.map(e => e.id === excId ? { ...e, status: 'resolved', resolution } : e));
     try {
       await fetch(`${API}/exception/${excId}/resolve`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ resolution }),
       });
-      setExceptions(prev => prev.map(e => e.id === excId ? { ...e, status: 'resolved', resolution } : e));
-    } catch { /* ignore */ }
+    } catch { /* API unavailable, local state already updated */ }
   };
 
   const updateHeuristic = async (key, value) => {
+    // Optimistic update so UI responds immediately
+    setHeuristics(prev => ({
+      ...prev,
+      heuristics: { ...prev.heuristics, [key]: value },
+    }));
     try {
       await fetch(`${API}/heuristics`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [key]: value }),
       });
-      setHeuristics(prev => ({
-        ...prev,
-        heuristics: { ...prev.heuristics, [key]: value },
-      }));
-    } catch { /* ignore */ }
+    } catch { /* API unavailable, local state already updated */ }
   };
 
   // ─── Derived data ──────────────────────────────────────────────────────────

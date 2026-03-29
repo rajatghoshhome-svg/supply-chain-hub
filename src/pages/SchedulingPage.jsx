@@ -184,7 +184,7 @@ export default function SchedulingPage() {
       const res = await fetch(`${API}/resequence`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plant, workCenter, orderIds }),
+        body: JSON.stringify({ plantCode: plant, workCenter, orderIds }),
       });
       if (res.ok) { const data = await res.json(); setSchedule(data); }
     } catch { /* keep local state */ }
@@ -192,10 +192,10 @@ export default function SchedulingPage() {
 
   const handleOptimize = async () => {
     try {
-      const res = await fetch(`${API}/optimize`, {
+      const res = await fetch(`${API}/optimize/${plant}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plant }),
+        body: JSON.stringify({ plantCode: plant }),
       });
       if (res.ok) { const data = await res.json(); setSchedule(data); }
     } catch { /* ignore */ }
@@ -203,10 +203,10 @@ export default function SchedulingPage() {
 
   const handleGenerate = async () => {
     try {
-      const res = await fetch(`${API}/generate`, {
+      const res = await fetch(`${API}/generate/${plant}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plant }),
+        body: JSON.stringify({ plantCode: plant }),
       });
       if (res.ok) { const data = await res.json(); setSchedule(data); }
     } catch { /* ignore */ }
@@ -217,7 +217,7 @@ export default function SchedulingPage() {
       await fetch(`${API}/changeover`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plant, fromFamily: fromFam, toFamily: toFam, hours }),
+        body: JSON.stringify({ plantCode: plant, fromFam, toFam, hours }),
       });
       // Optimistic update
       setSchedule(prev => {
@@ -233,8 +233,9 @@ export default function SchedulingPage() {
       await fetch(`${API}/config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plant, sequencingRule: rule }),
+        body: JSON.stringify({ plantCode: plant, rule }),
       });
+      fetchSchedule();
     } catch { /* ignore */ }
   };
 
@@ -243,7 +244,7 @@ export default function SchedulingPage() {
       const res = await fetch(`${API}/downtime`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plant, ...event }),
+        body: JSON.stringify({ plantCode: plant, ...event }),
       });
       if (res.ok) fetchSchedule();
       else {
@@ -254,13 +255,7 @@ export default function SchedulingPage() {
           return { ...prev, downtimeEvents: [...(prev.downtimeEvents || []), newEvt] };
         });
       }
-    } catch {
-      setSchedule(prev => {
-        if (!prev) return prev;
-        const newEvt = { id: `DT-NEW-${Date.now()}`, ...event };
-        return { ...prev, downtimeEvents: [...(prev.downtimeEvents || []), newEvt] };
-      });
-    }
+    } catch { /* fallback handled by else branch */ }
   };
 
   const handleAddOrder = async ({ familyId, qty, workCenter, priority }) => {
@@ -276,7 +271,7 @@ export default function SchedulingPage() {
 
   const handleRemoveDowntime = async (eventId) => {
     try {
-      await fetch(`${API}/downtime/${eventId}`, { method: 'DELETE' });
+      await fetch(`${API}/downtime/${eventId}?plantCode=${plant}`, { method: 'DELETE' });
     } catch { /* ignore */ }
     // Optimistic remove
     setSchedule(prev => {

@@ -22,6 +22,10 @@ const FALLBACK = {
       totalWeight: 186400,
       totalCost: 72350,
       activeLanes: 6,
+      recommendedShipments: 8,
+      pendingLoads: 0,
+      committedLoads: 0,
+      moveVsMakeScenarios: 2,
     },
     lanes: [
       { laneKey: 'PLT-DOGSTAR→DC-ATL', from: 'PLT-DOGSTAR', to: 'DC-ATL', mode: 'plant', distanceMiles: 460, leadTimeDays: 2, recommendedTransitType: 'truck', shipmentCount: 3 },
@@ -47,22 +51,37 @@ const FALLBACK = {
       'PLT-NORTHSTAR→DC-ATL': { shipDays: [1, 4], frequency: '2x/wk' },
     },
     dcInventory: {
-      'DC-ATL': { daysOfSupply: 18, onHand: 42500, inTransit: 12400, backorder: 0 },
-      'DC-DEN': { daysOfSupply: 12, onHand: 28300, inTransit: 8600, backorder: 1200 },
-      'DC-TOR': { daysOfSupply: 15, onHand: 34100, inTransit: 9800, backorder: 0 },
+      'DC-ATL': {
+        'orijen-dry-dog': { onHand: 14200, safetyStock: 8000, daysOfSupply: 22 },
+        'acana-dry-dog':  { onHand: 9800, safetyStock: 6000, daysOfSupply: 18 },
+        'orijen-dry-cat': { onHand: 11500, safetyStock: 7000, daysOfSupply: 20 },
+        'acana-wet-dog':  { onHand: 7000, safetyStock: 5000, daysOfSupply: 14 },
+      },
+      'DC-DEN': {
+        'orijen-dry-dog': { onHand: 9800, safetyStock: 7000, daysOfSupply: 14 },
+        'acana-dry-dog':  { onHand: 5200, safetyStock: 5500, daysOfSupply: 9 },
+        'orijen-freeze-dry': { onHand: 4300, safetyStock: 3000, daysOfSupply: 12 },
+        'acana-wet-dog':  { onHand: 9000, safetyStock: 6000, daysOfSupply: 16 },
+      },
+      'DC-TOR': {
+        'orijen-dry-cat': { onHand: 12400, safetyStock: 6000, daysOfSupply: 24 },
+        'acana-dry-dog':  { onHand: 8700, safetyStock: 5000, daysOfSupply: 18 },
+        'orijen-dry-dog': { onHand: 6900, safetyStock: 7500, daysOfSupply: 10 },
+        'orijen-freeze-dry': { onHand: 6100, safetyStock: 4000, daysOfSupply: 15 },
+      },
     },
   },
 
   shipmentData: {
     shipments: [
-      { id: 'SHP-4001', laneKey: 'PLT-DOGSTAR→DC-ATL', fromCode: 'PLT-DOGSTAR', toCode: 'DC-ATL', sku: 'Orijen Original Dry Dog 25lb', qty: 1800, uom: 'cases', weight: 45000, priority: 'high' },
-      { id: 'SHP-4002', laneKey: 'PLT-DOGSTAR→DC-ATL', fromCode: 'PLT-DOGSTAR', toCode: 'DC-ATL', sku: 'Acana Red Meat Dry Dog 25lb', qty: 1200, uom: 'cases', weight: 30000, priority: 'medium' },
-      { id: 'SHP-4003', laneKey: 'PLT-DOGSTAR→DC-ATL', fromCode: 'PLT-DOGSTAR', toCode: 'DC-ATL', sku: 'Orijen Six Fish Dry Dog 25lb', qty: 600, uom: 'cases', weight: 15000, priority: 'normal' },
-      { id: 'SHP-4004', laneKey: 'PLT-DOGSTAR→DC-DEN', fromCode: 'PLT-DOGSTAR', toCode: 'DC-DEN', sku: 'Orijen Original Dry Dog 25lb', qty: 1400, uom: 'cases', weight: 35000, priority: 'high' },
-      { id: 'SHP-4005', laneKey: 'PLT-DOGSTAR→DC-DEN', fromCode: 'PLT-DOGSTAR', toCode: 'DC-DEN', sku: 'Acana Wet Dog Lamb 12.8oz', qty: 960, uom: 'cases', weight: 9600, priority: 'medium' },
-      { id: 'SHP-4006', laneKey: 'PLT-NORTHSTAR→DC-TOR', fromCode: 'PLT-NORTHSTAR', toCode: 'DC-TOR', sku: 'Orijen Dry Cat Tundra 12lb', qty: 2200, uom: 'cases', weight: 26400, priority: 'high' },
-      { id: 'SHP-4007', laneKey: 'PLT-NORTHSTAR→DC-TOR', fromCode: 'PLT-NORTHSTAR', toCode: 'DC-TOR', sku: 'Acana Dry Dog Heritage 25lb', qty: 800, uom: 'cases', weight: 20000, priority: 'normal' },
-      { id: 'SHP-4008', laneKey: 'PLT-NORTHSTAR→DC-DEN', fromCode: 'PLT-NORTHSTAR', toCode: 'DC-DEN', sku: 'Orijen Freeze-Dried Dog 16oz', qty: 540, uom: 'cases', weight: 5400, priority: 'medium' },
+      { id: 'SHP-4001', laneKey: 'PLT-DOGSTAR→DC-ATL', fromCode: 'PLT-DOGSTAR', toCode: 'DC-ATL', skuName: 'Orijen Original Dry Dog 25lb', qty: 1800, uom: 'cases', weightLbs: 45000, pallets: 24, priority: 'high' },
+      { id: 'SHP-4002', laneKey: 'PLT-DOGSTAR→DC-ATL', fromCode: 'PLT-DOGSTAR', toCode: 'DC-ATL', skuName: 'Acana Red Meat Dry Dog 25lb', qty: 1200, uom: 'cases', weightLbs: 30000, pallets: 16, priority: 'medium' },
+      { id: 'SHP-4003', laneKey: 'PLT-DOGSTAR→DC-ATL', fromCode: 'PLT-DOGSTAR', toCode: 'DC-ATL', skuName: 'Orijen Six Fish Dry Dog 25lb', qty: 600, uom: 'cases', weightLbs: 15000, pallets: 8, priority: 'normal' },
+      { id: 'SHP-4004', laneKey: 'PLT-DOGSTAR→DC-DEN', fromCode: 'PLT-DOGSTAR', toCode: 'DC-DEN', skuName: 'Orijen Original Dry Dog 25lb', qty: 1400, uom: 'cases', weightLbs: 35000, pallets: 18, priority: 'high' },
+      { id: 'SHP-4005', laneKey: 'PLT-DOGSTAR→DC-DEN', fromCode: 'PLT-DOGSTAR', toCode: 'DC-DEN', skuName: 'Acana Wet Dog Lamb 12.8oz', qty: 960, uom: 'cases', weightLbs: 9600, pallets: 6, priority: 'medium' },
+      { id: 'SHP-4006', laneKey: 'PLT-NORTHSTAR→DC-TOR', fromCode: 'PLT-NORTHSTAR', toCode: 'DC-TOR', skuName: 'Orijen Dry Cat Tundra 12lb', qty: 2200, uom: 'cases', weightLbs: 26400, pallets: 14, priority: 'high' },
+      { id: 'SHP-4007', laneKey: 'PLT-NORTHSTAR→DC-TOR', fromCode: 'PLT-NORTHSTAR', toCode: 'DC-TOR', skuName: 'Acana Dry Dog Heritage 25lb', qty: 800, uom: 'cases', weightLbs: 20000, pallets: 10, priority: 'normal' },
+      { id: 'SHP-4008', laneKey: 'PLT-NORTHSTAR→DC-DEN', fromCode: 'PLT-NORTHSTAR', toCode: 'DC-DEN', skuName: 'Orijen Freeze-Dried Dog 16oz', qty: 540, uom: 'cases', weightLbs: 5400, pallets: 4, priority: 'medium' },
     ],
     pendingLoads: [],
     committedLoads: [],
@@ -193,25 +212,34 @@ export default function DrpPage() {
   }, [activeTab, fetchPlan, fetchShipments, fetchScenarios]);
 
   const handleUpdateSplit = async (familyId, allocations) => {
+    // Optimistic update
+    setPlan(prev => {
+      if (!prev?.demandSplits) return prev;
+      return { ...prev, demandSplits: { ...prev.demandSplits, [familyId]: allocations } };
+    });
     try {
       await fetch(`${API}/demand-split`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ familyId, allocations }),
       });
-      fetchPlan();
-    } catch (e) { /* ignore */ }
+    } catch { /* API unavailable, local state already updated */ }
   };
 
   const handleUpdateCalendar = async (laneKey, updates) => {
+    // Optimistic update
+    setPlan(prev => {
+      if (!prev?.calendars) return prev;
+      const cal = prev.calendars[laneKey] || {};
+      return { ...prev, calendars: { ...prev.calendars, [laneKey]: { ...cal, ...updates } } };
+    });
     try {
       await fetch(`${API}/shipping-calendar`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ laneKey, ...updates }),
       });
-      fetchPlan();
-    } catch (e) { /* ignore */ }
+    } catch { /* API unavailable, local state already updated */ }
   };
 
   return (

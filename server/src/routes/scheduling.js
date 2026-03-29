@@ -599,7 +599,7 @@ schedulingRouter.post('/champion/downtime', (req, res) => {
     if (!plantCode || !workCenter) {
       return res.status(400).json({ error: 'plantCode and workCenter required' });
     }
-    schedStore.addDowntimeEvent(plantCode, workCenter, type || 'maintenance', startHr || 0, endHr || 8, reason || '');
+    schedStore.addDowntimeEvent(plantCode, { workCenter, type: type || 'maintenance', startHr: startHr || 0, endHr: endHr || 8, reason: reason || '' });
     res.json({ status: 'ok', events: schedStore.getDowntimeEvents(plantCode) });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

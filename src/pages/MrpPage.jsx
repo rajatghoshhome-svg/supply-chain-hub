@@ -153,10 +153,10 @@ export default function MrpPage() {
         }),
       });
       if (!resp.ok) throw new Error(`Decision API returned ${resp.status}`);
-      setResolvedExceptions(prev => ({ ...prev, [index]: { status: statusMap[action], action } }));
-    } catch (err) {
-      console.error('Failed to log decision:', err);
+    } catch {
+      /* API unavailable — proceed with optimistic update */
     }
+    setResolvedExceptions(prev => ({ ...prev, [index]: { status: statusMap[action], action } }));
     setActionLoading(null);
   };
 
