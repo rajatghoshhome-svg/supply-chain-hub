@@ -757,11 +757,36 @@ export default function OnboardingPage() {
     }
   }, []);
 
-  const handleAccept = useCallback((dataType) => {
+  const handleAccept = useCallback(async (dataType) => {
     setUploads(prev => ({
       ...prev,
-      [dataType]: { ...prev[dataType], status: 'accepted' },
+      [dataType]: { ...prev[dataType], status: 'confirming' },
     }));
+    try {
+      const resp = await fetch('/api/import/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: dataType }),
+      });
+      if (resp.ok) {
+        setUploads(prev => ({
+          ...prev,
+          [dataType]: { ...prev[dataType], status: 'accepted' },
+        }));
+      } else {
+        const data = await resp.json().catch(() => ({}));
+        setUploads(prev => ({
+          ...prev,
+          [dataType]: { ...prev[dataType], status: 'confirm-error', confirmError: data.error || 'Failed to persist data' },
+        }));
+      }
+    } catch {
+      // If backend is unavailable (e.g. Vercel), just mark as accepted anyway
+      setUploads(prev => ({
+        ...prev,
+        [dataType]: { ...prev[dataType], status: 'accepted' },
+      }));
+    }
   }, []);
 
   const handleReupload = useCallback((dataType) => {

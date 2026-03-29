@@ -13,6 +13,7 @@ const MrpPage = lazy(() => import('./pages/MrpPage'));
 const DecisionsPage = lazy(() => import('./pages/DecisionsPage'));
 const AgentPage = lazy(() => import('./pages/AgentPage'));
 const OnboardingPage = lazy(() => import('./pages/OnboardingPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 
 export default function App() {
   return (
@@ -35,6 +36,7 @@ export default function App() {
             <Route path="/decisions" element={<DecisionsPage />} />
             <Route path="/agent" element={<AgentPage />} />
             <Route path="/setup" element={<OnboardingPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </Suspense>
       </div>

@@ -23,6 +23,7 @@ import { runMRP, explodeBOM } from '../engines/mrp-engine.js';
 import { buildMRPContext, formatMRPSummary } from '../services/ai-context/mrp-context.js';
 import { skuMaster, bomTree, plantBOMs, generateDemandForecast, getSkuByCode } from '../services/data-provider.js';
 import { getProductsForPlant, getPlants, plantInventory } from '../services/data-provider.js';
+import { attachFinancialImpacts } from '../services/financial-impact.js';
 
 export const mrpRouter = Router();
 
@@ -242,6 +243,19 @@ mrpRouter.get('/demo', (req, res) => {
     } else {
       ({ mrpResults, periods } = runFullMRP());
     }
+
+    // Attach per-exception financial impact and cross-module traceability
+    mrpResults.forEach(r => {
+      r.exceptions = attachFinancialImpacts(r.exceptions || []);
+      // Add source traceability for cross-module navigation
+      r.exceptions.forEach(exc => {
+        if (!exc.sourceModule) {
+          exc.sourceModule = 'drp';
+          exc.sourcePlant = r.plantCode || plant || null;
+          exc.sourceSku = exc.skuCode || r.sku?.code || null;
+        }
+      });
+    });
 
     const summary = formatMRPSummary(mrpResults);
     const totalExceptions = mrpResults.reduce((sum, r) => sum + r.exceptions.length, 0);

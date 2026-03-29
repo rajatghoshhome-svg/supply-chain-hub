@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { T } from '../styles/tokens';
 import ModuleLayout from '../components/shared/ModuleLayout';
 import PageHeader from '../components/shared/PageHeader';
 import Card from '../components/shared/Card';
+import TrustScore from '../components/TrustScore';
+import DataSourceBadge from '../components/shared/DataSourceBadge';
 
 const TABS = [
   { id: 'bom', label: 'Bill of Materials' },
@@ -106,6 +109,7 @@ const STATIC_BOM = {
 };
 
 export default function MrpPage() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState('records');
   const [data, setData] = useState(null);
   const [bomData, setBomData] = useState(null);
@@ -120,6 +124,41 @@ export default function MrpPage() {
   const [newBomLine, setNewBomLine] = useState({ code: '', name: '', qtyPer: 1, scrapPct: 0 });
   const [bomSaving, setBomSaving] = useState(false);
   const [requirementsView, setRequirementsView] = useState('summary'); // 'summary' or 'explosion'
+  const [isLive, setIsLive] = useState(false);
+  const [resolvedExceptions, setResolvedExceptions] = useState({}); // { index: { status, decidedBy } }
+  const [actionLoading, setActionLoading] = useState(null); // index being acted on
+
+  const handleExceptionAction = async (exception, index, action) => {
+    setActionLoading(index);
+    try {
+      const statusMap = { accept: 'accepted', defer: 'deferred', dismiss: 'dismissed' };
+      const actionLabel = action === 'accept' ? `Accept: ${exception.type}` : action === 'defer' ? `Defer: ${exception.type}` : `Dismiss: ${exception.type}`;
+      const resp = await fetch('/api/decisions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          module: 'mrp',
+          action: actionLabel,
+          entityType: 'exception',
+          entity: `${exception.skuCode || 'Unknown'} — ${exception.message?.slice(0, 60)}`,
+          rationale: suggestions[index]?.suggestedAction
+            ? `AI suggested: ${suggestions[index].suggestedAction} (${suggestions[index].confidence}% confidence)`
+            : 'Planner decision',
+          decidedBy: action === 'accept' && suggestions[index]?.confidence >= 60 ? 'AI recommended' : 'Planner',
+          financialImpact: exception.qty ? {
+            amount: exception.type === 'expedite' ? exception.qty * 15 : exception.type === 'cancel' ? exception.qty * 7.5 : exception.qty * 10,
+            type: action === 'accept' ? 'cost-avoidance' : 'cost',
+          } : null,
+          status: statusMap[action],
+        }),
+      });
+      if (!resp.ok) throw new Error(`Decision API returned ${resp.status}`);
+      setResolvedExceptions(prev => ({ ...prev, [index]: { status: statusMap[action], action } }));
+    } catch (err) {
+      console.error('Failed to log decision:', err);
+    }
+    setActionLoading(null);
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -130,6 +169,7 @@ export default function MrpPage() {
       .then(([mrp, bom]) => {
         setData(mrp);
         setBomData(bom);
+        setIsLive(true);
         if (mrp.results?.length > 0) setSelectedSku(mrp.results[0].skuCode);
         // Expand all FGs by default
         const expanded = new Set();
@@ -141,6 +181,7 @@ export default function MrpPage() {
         console.warn('MRP API unavailable, using static fallback');
         setData(STATIC_MRP);
         setBomData(STATIC_BOM);
+        setIsLive(false);
         if (STATIC_MRP.results?.length > 0) setSelectedSku(STATIC_MRP.results[0].skuCode);
         const expanded = new Set();
         STATIC_BOM.tree?.forEach(fg => expanded.add(fg.code));
@@ -280,7 +321,10 @@ export default function MrpPage() {
 
   return (
     <ModuleLayout moduleContext="mrp" tabs={TABS} activeTab={tab} onTabChange={setTab}>
-      <PageHeader title="Material Planning" subtitle="Requirements & Bill of Materials" />
+      <PageHeader title="Material Planning" subtitle="Requirements & Bill of Materials">
+        <DataSourceBadge isLive={isLive} />
+        <TrustScore module="mrp" compact />
+      </PageHeader>
 
       <div className="module-content" style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
 
@@ -539,7 +583,7 @@ export default function MrpPage() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                     <thead>
                       <tr style={{ borderBottom: `2px solid ${T.border}` }}>
-                        {['Severity', 'Item', 'Type', 'Period', 'Qty', 'Message', 'AI Suggestion'].map(h => (
+                        {['Severity', 'Item', 'Type', 'Period', 'Qty', '$ Impact', 'Source', 'Message', 'AI Suggestion', 'Actions'].map(h => (
                           <th key={h} scope="col" style={{ textAlign: 'left', padding: '8px 10px', color: T.inkLight, fontWeight: 500, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>
                         ))}
                       </tr>
@@ -561,6 +605,23 @@ export default function MrpPage() {
                           <td style={{ padding: '8px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{e.type}</td>
                           <td style={{ padding: '8px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{e.period || e.fromPeriod || '\u2014'}</td>
                           <td style={{ padding: '8px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{e.qty || '\u2014'}</td>
+                          <td style={{ padding: '8px 10px', fontFamily: 'JetBrains Mono', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', color: e.financialImpact?.type === 'cost' || e.financialImpact?.type === 'risk' ? T.risk : e.financialImpact?.type === 'cost-avoidance' || e.financialImpact?.type === 'savings' ? T.safe : T.inkMid }}>
+                            {e.financialImpact ? `$${e.financialImpact.amount.toLocaleString()}` : '—'}
+                          </td>
+                          <td style={{ padding: '8px 10px' }}>
+                            {e.sourceModule && (
+                              <button
+                                onClick={() => navigate(`/${e.sourceModule}?sku=${e.sourceSku || e.skuCode}`)}
+                                style={{
+                                  background: 'none', border: `1px solid ${T.accent}`, borderRadius: 4,
+                                  padding: '2px 8px', fontSize: 10, fontFamily: 'JetBrains Mono', color: T.accent,
+                                  cursor: 'pointer', whiteSpace: 'nowrap',
+                                }}
+                              >
+                                DRP {e.sourceDCs?.[0] ? `· ${e.sourceDCs[0]}` : ''}
+                              </button>
+                            )}
+                          </td>
                           <td style={{ padding: '8px 10px', fontSize: 12, color: T.inkMid }}>{e.message}</td>
                           <td style={{ padding: '8px 10px' }}>
                             {suggestions[i] && suggestions[i].confidence >= 30 && (
@@ -578,6 +639,35 @@ export default function MrpPage() {
                               }}>
                                 AI: {suggestions[i].suggestedAction} ({suggestions[i].confidence}%)
                               </span>
+                            )}
+                          </td>
+                          <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
+                            {resolvedExceptions[i] ? (
+                              <span style={{
+                                display: 'inline-block', padding: '3px 10px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                                background: resolvedExceptions[i].status === 'accepted' ? '#e6f4ea' : resolvedExceptions[i].status === 'deferred' ? '#fef3e0' : T.bgDark,
+                                color: resolvedExceptions[i].status === 'accepted' ? '#1a7f37' : resolvedExceptions[i].status === 'deferred' ? '#9a6700' : T.inkMid,
+                              }}>
+                                {resolvedExceptions[i].status === 'accepted' ? '✓ Accepted' : resolvedExceptions[i].status === 'deferred' ? '⏳ Deferred' : '✕ Dismissed'}
+                              </span>
+                            ) : (
+                              <div style={{ display: 'flex', gap: 4 }}>
+                                {[
+                                  { key: 'accept', label: 'Accept', bg: '#e6f4ea', color: '#1a7f37', border: '#a7d9b2' },
+                                  { key: 'defer', label: 'Defer', bg: '#fef3e0', color: '#9a6700', border: '#f0c87a' },
+                                  { key: 'dismiss', label: 'Dismiss', bg: T.bgDark, color: T.inkMid, border: T.border },
+                                ].map(btn => (
+                                  <button key={btn.key} onClick={() => handleExceptionAction(e, i, btn.key)}
+                                    disabled={actionLoading === i}
+                                    style={{
+                                      padding: '3px 8px', borderRadius: 4, fontSize: 10, fontWeight: 500, cursor: 'pointer',
+                                      background: btn.bg, color: btn.color, border: `1px solid ${btn.border}`,
+                                      opacity: actionLoading === i ? 0.5 : 1,
+                                    }}>
+                                    {actionLoading === i ? '...' : btn.label}
+                                  </button>
+                                ))}
+                              </div>
                             )}
                           </td>
                         </tr>

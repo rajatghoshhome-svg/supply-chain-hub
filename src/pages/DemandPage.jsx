@@ -4,6 +4,8 @@ import ModuleLayout from '../components/shared/ModuleLayout';
 import PageHeader from '../components/shared/PageHeader';
 import Card from '../components/shared/Card';
 import ForecastChart from '../components/demand/ForecastChart';
+import TrustScore from '../components/TrustScore';
+import DataSourceBadge from '../components/shared/DataSourceBadge';
 
 const TABS = [
   { id: 'forecast', label: 'Statistical Forecast' },
@@ -85,6 +87,7 @@ export default function DemandPage() {
   const [historyData, setHistoryData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [isLive, setIsLive] = useState(false);
 
   // Planner overrides for demand forecast
   const [overrides, setOverrides] = useState({});
@@ -153,6 +156,7 @@ export default function DemandPage() {
     ]).then(([demo, hist]) => {
       setDemoData(demo);
       setHistoryData(hist);
+      setIsLive(true);
       setLoading(false);
 
       // If the server triggered a cascade, connect SSE to track it
@@ -164,6 +168,7 @@ export default function DemandPage() {
       console.warn('Demand API unavailable, using static fallback data');
       setDemoData(STATIC_DEMO);
       setHistoryData(STATIC_HISTORY);
+      setIsLive(false);
       setError(null);
       setLoading(false);
     });
@@ -197,7 +202,10 @@ export default function DemandPage() {
 
   return (
     <ModuleLayout moduleContext="demand" tabs={TABS} activeTab={tab} onTabChange={setTab}>
-      <PageHeader title="Demand Planning" subtitle="Forecast & Analyze" />
+      <PageHeader title="Demand Planning" subtitle="Forecast & Analyze">
+        <DataSourceBadge isLive={isLive} />
+        <TrustScore module="demand" compact />
+      </PageHeader>
 
       <div className="module-content" style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px' }}>
 

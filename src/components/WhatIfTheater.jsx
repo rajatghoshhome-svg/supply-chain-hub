@@ -81,6 +81,9 @@ export default function WhatIfTheater() {
   const [error, setError] = useState(null);
   const [externalRisks, setExternalRisks] = useState([]);
   const [modeledRiskIds, setModeledRiskIds] = useState(new Set());
+  const [savedScenarios, setSavedScenarios] = useState([]);
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [saveLabel, setSaveLabel] = useState('');
 
   // Fetch external risks on mount
   useEffect(() => {
@@ -102,6 +105,57 @@ export default function WhatIfTheater() {
     load();
     return () => { cancelled = true; };
   }, []);
+
+  // Fetch saved scenarios on mount
+  useEffect(() => {
+    let cancelled = false;
+    async function loadSaved() {
+      try {
+        const resp = await fetch('/api/cascade/scenarios');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (!cancelled && Array.isArray(data.scenarios)) {
+          setSavedScenarios(data.scenarios);
+        }
+      } catch { /* silent */ }
+    }
+    loadSaved();
+    return () => { cancelled = true; };
+  }, []);
+
+  async function saveCurrentScenario() {
+    if (!results || results.length === 0) return;
+    setSaveLoading(true);
+    try {
+      const label = saveLabel.trim() || `Scenario ${new Date().toLocaleString()}`;
+      const resp = await fetch('/api/cascade/scenarios/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          demandMultiplier: results[0].multiplier,
+          label,
+          scenarios: results,
+        }),
+      });
+      if (resp.ok) {
+        const saved = await resp.json();
+        setSavedScenarios(prev => [...prev, saved]);
+        setSaveLabel('');
+      }
+    } catch { /* silent */ } finally {
+      setSaveLoading(false);
+    }
+  }
+
+  function loadSavedScenario(scenario) {
+    // Restore results from saved scenario
+    if (scenario.scenarios && scenario.scenarios.length > 0) {
+      setResults(scenario.scenarios);
+    } else {
+      // Fallback: generate from stored multiplier
+      setResults([generateStaticScenario(scenario.demandMultiplier, scenario.label)]);
+    }
+  }
 
   function togglePreset(idx) {
     setSelected(prev => {
@@ -450,6 +504,78 @@ export default function WhatIfTheater() {
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Save Scenario */}
+      {results && !loading && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16 }}>
+          <input
+            type="text"
+            value={saveLabel}
+            onChange={e => setSaveLabel(e.target.value)}
+            placeholder="Name this scenario..."
+            style={{
+              flex: 1, maxWidth: 280, padding: '8px 12px', borderRadius: 6,
+              border: `1px solid ${T.border}`, fontSize: 13, fontFamily: 'Sora',
+              outline: 'none',
+            }}
+          />
+          <button
+            onClick={saveCurrentScenario}
+            disabled={saveLoading}
+            style={{
+              background: T.ink, color: T.white, border: 'none', padding: '8px 20px',
+              borderRadius: 6, cursor: saveLoading ? 'not-allowed' : 'pointer',
+              fontSize: 13, fontFamily: 'Sora', fontWeight: 600,
+              opacity: saveLoading ? 0.6 : 1, transition: 'all 0.15s',
+            }}
+          >
+            {saveLoading ? 'Saving...' : 'Save Scenario'}
+          </button>
+        </div>
+      )}
+
+      {/* Saved Scenarios */}
+      {savedScenarios.length > 0 && (
+        <div style={{ marginTop: 24, borderTop: `1px solid ${T.border}`, paddingTop: 16 }}>
+          <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9, color: T.inkLight, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 10 }}>
+            Saved Scenarios
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {savedScenarios.map((s, i) => (
+              <div
+                key={s.id || i}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8,
+                  padding: '10px 14px',
+                }}
+              >
+                <div>
+                  <div style={{ fontFamily: 'Sora', fontSize: 13, fontWeight: 500, color: T.ink }}>
+                    {s.label}
+                  </div>
+                  <div style={{ fontFamily: 'JetBrains Mono', fontSize: 11, color: T.inkLight, marginTop: 2 }}>
+                    {s.demandMultiplier}x demand
+                    {s.financialImpact && ` · $${Math.round(s.financialImpact.totalCost || 0).toLocaleString()} cost`}
+                    {s.savedAt && ` · ${new Date(s.savedAt).toLocaleDateString()}`}
+                  </div>
+                </div>
+                <button
+                  onClick={() => loadSavedScenario(s)}
+                  style={{
+                    background: T.white, color: T.accent, border: `1px solid ${T.accent}`,
+                    padding: '5px 14px', borderRadius: 6, cursor: 'pointer',
+                    fontSize: 12, fontFamily: 'Sora', fontWeight: 600,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  Load
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

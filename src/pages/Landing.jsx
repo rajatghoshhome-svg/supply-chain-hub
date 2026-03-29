@@ -1,10 +1,29 @@
 import { useNavigate } from 'react-router-dom';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Component } from 'react';
 import { T } from '../styles/tokens';
 import CascadeViz from '../components/CascadeViz';
 import NetworkMap from '../components/NetworkMap';
 import WhatIfTheater from '../components/WhatIfTheater';
 import MorningBriefing from '../components/MorningBriefing';
+
+// Error boundary to prevent individual component crashes from killing the whole page
+class SafeRender extends Component {
+  constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ background: T.riskBg, border: `1px solid ${T.riskBorder}`, borderRadius: 8, padding: '16px 20px', margin: '8px 0' }}>
+          <div style={{ fontFamily: 'Sora', fontSize: 13, fontWeight: 600, color: T.risk, marginBottom: 4 }}>
+            {this.props.name || 'Component'} failed to load
+          </div>
+          <div style={{ fontSize: 12, color: T.inkMid }}>{this.state.error?.message || 'Unknown error'}</div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const CASCADE_STEPS = [
   { module: 'demand', label: 'Demand Plan', path: '/demand', desc: 'Statistical forecasting with 5 methods, best-fit selection, accuracy metrics' },
@@ -43,12 +62,44 @@ export default function Landing() {
     }
   }, []);
 
+  const [moduleHealth, setModuleHealth] = useState(null);
+
   useEffect(() => {
     // Fetch a quick DRP demo to show live stats
     fetch('/api/drp/demo')
       .then(r => r.json())
       .then(d => setStats(d))
       .catch(() => setStats({ skusPlanned: 11, locationsPlanned: 3, plantsServed: 3, totalExceptions: 2, criticalExceptions: 1 }));
+  }, []);
+
+  // Fetch per-module health
+  useEffect(() => {
+    async function loadHealth() {
+      const modules = [
+        { key: 'demand', endpoint: '/api/demand/demo', label: 'Demand' },
+        { key: 'drp', endpoint: '/api/drp/demo', label: 'DRP' },
+        { key: 'production', endpoint: '/api/production-plan/demo', label: 'Production' },
+        { key: 'scheduling', endpoint: '/api/scheduling/demo', label: 'Scheduling' },
+        { key: 'mrp', endpoint: '/api/mrp/demo', label: 'MRP' },
+      ];
+      const results = {};
+      for (const m of modules) {
+        try {
+          const resp = await fetch(m.endpoint);
+          const data = await resp.json();
+          results[m.key] = {
+            label: m.label,
+            live: resp.ok,
+            exceptions: data.totalExceptions ?? data.criticalExceptions ?? 0,
+            critical: data.criticalExceptions ?? 0,
+          };
+        } catch {
+          results[m.key] = { label: m.label, live: false, exceptions: 0, critical: 0 };
+        }
+      }
+      setModuleHealth(results);
+    }
+    loadHealth();
   }, []);
 
   return (
@@ -105,7 +156,70 @@ export default function Landing() {
 
       {/* Morning Briefing */}
       <div className="landing-section" style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 40px 0' }}>
-        <MorningBriefing />
+        <SafeRender name="Morning Briefing"><MorningBriefing /></SafeRender>
+      </div>
+
+      {/* System Health */}
+      {moduleHealth && (
+        <div className="landing-section" style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px 0' }}>
+          <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9.5, color: T.inkLight, letterSpacing: 1.4, marginBottom: 10, textTransform: 'uppercase' }}>System Health</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+            {Object.entries(moduleHealth).map(([key, m]) => (
+              <div
+                key={key}
+                onClick={() => navigate(`/${key === 'production' ? 'production-plan' : key}`)}
+                style={{
+                  background: T.white, border: `1px solid ${T.border}`, borderRadius: 8,
+                  padding: '14px 16px', cursor: 'pointer', transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = T.ink; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontFamily: 'Sora', fontSize: 13, fontWeight: 600, color: T.ink }}>{m.label}</span>
+                  <span style={{
+                    width: 8, height: 8, borderRadius: '50%',
+                    background: m.live ? T.safe : T.inkGhost,
+                    display: 'inline-block',
+                  }} />
+                </div>
+                <div style={{ fontFamily: 'JetBrains Mono', fontSize: 11, color: m.critical > 0 ? T.risk : m.exceptions > 0 ? T.warn : T.safe }}>
+                  {m.exceptions > 0 ? `${m.exceptions} exceptions` : 'Clean'}
+                  {m.critical > 0 && <span style={{ color: T.risk, fontWeight: 600 }}> ({m.critical} critical)</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Quick Actions */}
+      <div className="landing-section" style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px 0' }}>
+        <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9.5, color: T.inkLight, letterSpacing: 1.4, marginBottom: 10, textTransform: 'uppercase' }}>Quick Actions</div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {[
+            { label: 'Override Forecast', path: '/demand', desc: 'Adjust demand and trigger cascade' },
+            { label: 'Review Exceptions', path: '/mrp', desc: 'Accept, defer, or dismiss action messages' },
+            { label: 'Resequence Orders', path: '/scheduling', desc: 'Drag orders on the Gantt chart' },
+            { label: 'Decision Log', path: '/decisions', desc: 'Review all planning decisions' },
+            { label: 'Import Data', path: '/onboarding', desc: 'Upload CSV to replace demo data' },
+          ].map(a => (
+            <button
+              key={a.path}
+              onClick={() => navigate(a.path)}
+              style={{
+                background: T.white, border: `1px solid ${T.border}`, borderRadius: 8,
+                padding: '12px 18px', cursor: 'pointer', textAlign: 'left',
+                transition: 'all 0.15s', flex: '1 1 180px', minWidth: 180,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = T.accent; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; }}
+            >
+              <div style={{ fontFamily: 'Sora', fontSize: 13, fontWeight: 600, color: T.ink, marginBottom: 4 }}>{a.label}</div>
+              <div style={{ fontSize: 11, color: T.inkMid }}>{a.desc}</div>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ASCM Cascade Flow */}
@@ -189,17 +303,17 @@ export default function Landing() {
             </span>
           )}
         </div>
-        <CascadeViz />
+        <SafeRender name="Cascade Visualization"><CascadeViz /></SafeRender>
       </div>
 
       {/* Network Architecture — Interactive Map */}
       <div className="landing-section" style={{ maxWidth: 1200, margin: '0 auto', padding: '0 40px 32px' }}>
-        <NetworkMap />
+        <SafeRender name="Network Map"><NetworkMap /></SafeRender>
       </div>
 
       {/* What-If Theater */}
       <div className="landing-section" style={{ maxWidth: 1200, margin: '0 auto', padding: '0 40px 32px' }}>
-        <WhatIfTheater />
+        <SafeRender name="What-If Theater"><WhatIfTheater /></SafeRender>
       </div>
 
       {/* Architecture */}

@@ -52,6 +52,58 @@ export function calculateFinancialImpact(scenarioResult, costs = DEFAULT_COSTS) 
   };
 }
 
+/**
+ * Per-exception financial impact calculator.
+ * Attaches a dollar amount to each exception so planners can prioritize by cost.
+ */
+export function calculateExceptionImpact(exception, costs = DEFAULT_COSTS) {
+  const qty = exception.qty || exception.affectedQty || 100; // fallback for exceptions without qty
+  const type = (exception.type || '').toLowerCase();
+
+  let amount = 0;
+  let impactType = 'cost';
+
+  if (type.includes('expedite')) {
+    amount = qty * costs.expeditePerUnit;
+    impactType = 'cost';
+  } else if (type.includes('stockout') || type.includes('safety-stock')) {
+    amount = qty * costs.stockoutPerUnit;
+    impactType = 'risk';
+  } else if (type.includes('reschedule-in')) {
+    amount = qty * (costs.reschedulePerUnit || 7.5);
+    impactType = 'cost';
+  } else if (type.includes('reschedule-out')) {
+    amount = qty * (costs.rescheduleOutPerUnit || 2.5); // carrying cost savings opportunity
+    impactType = 'cost-avoidance';
+  } else if (type.includes('capacity') || type.includes('overload')) {
+    amount = (exception.hours || 8) * costs.overtimePerHour;
+    impactType = 'cost';
+  } else if (type.includes('cancel')) {
+    amount = qty * (costs.cancelPerUnit || 7.5);
+    impactType = 'savings';
+  } else {
+    // Generic exception
+    amount = qty * 10;
+    impactType = 'cost';
+  }
+
+  return {
+    amount: Math.round(amount),
+    type: impactType,
+    formatted: `$${Math.round(amount).toLocaleString()}`,
+  };
+}
+
+/**
+ * Attach financial impact to every exception in an array.
+ */
+export function attachFinancialImpacts(exceptions, costs = DEFAULT_COSTS) {
+  return exceptions.map(e => ({
+    ...e,
+    financialImpact: calculateExceptionImpact(e, costs),
+  }));
+}
+
 export function compareScenarios(scenarios) {
   // scenarios is array of { label, multiplier, ...cascadeResult }
   return scenarios.map(s => ({

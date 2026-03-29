@@ -147,8 +147,15 @@ function buildNetworkLocations() {
   for (const dc of syntheticDCs) {
     locs.push({ code: dc.code, name: dc.name, type: 'dc', city: dc.city, state: dc.state, lat: dc.lat, lng: dc.lon });
   }
+  // Supplier geocodes (suppliers don't have lat/lng in base data)
+  const supplierGeo = {
+    'Fresno':      { lat: 36.74, lng: -119.77 },
+    'Des Moines':  { lat: 41.59, lng: -93.61 },
+    'Birmingham':  { lat: 33.52, lng: -86.80 },
+  };
   for (const s of syntheticSuppliersArray) {
-    locs.push({ code: s.code, name: s.name, type: 'supplier', city: s.city, state: s.state, lat: null, lng: null, materials: s.materials });
+    const geo = supplierGeo[s.city] || { lat: null, lng: null };
+    locs.push({ code: s.code, name: s.name, type: 'supplier', city: s.city, state: s.state, lat: geo.lat, lng: geo.lng, materials: s.materials });
   }
   return locs;
 }

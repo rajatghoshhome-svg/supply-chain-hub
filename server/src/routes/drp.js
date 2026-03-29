@@ -24,6 +24,7 @@ import {
   getDCs,
   getPlants,
 } from '../services/data-provider.js';
+import { attachFinancialImpacts } from '../services/financial-impact.js';
 
 export const drpRouter = Router();
 
@@ -91,6 +92,11 @@ drpRouter.get('/demo', (req, res) => {
         agg.totalGrossReqs[i] += result.plantRequirements.grossReqs[i] || 0;
       }
     }
+
+    // Attach per-exception financial impact
+    results.forEach(r => {
+      if (r.exceptions) r.exceptions = attachFinancialImpacts(r.exceptions);
+    });
 
     const totalExceptions = results.reduce((s, r) => s + (r.exceptions?.length || 0), 0);
     const criticalExceptions = results.reduce(

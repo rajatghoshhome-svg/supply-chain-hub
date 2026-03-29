@@ -12,7 +12,7 @@ const STATIC_TRUST = {
   },
 };
 
-export default function TrustScore() {
+export default function TrustScore({ module, compact } = {}) {
   const [data, setData] = useState(null);
 
   useEffect(() => {
@@ -25,6 +25,31 @@ export default function TrustScore() {
   if (!data) return null;
 
   const { overall, perModule } = data;
+
+  // Compact mode: small inline badge for a single module
+  if (compact && module) {
+    const stats = perModule[module] || overall;
+    const pct = stats.trustPct || 0;
+    const color = pct >= 70 ? T.safe : pct >= 50 ? T.warn : T.risk;
+    return (
+      <div style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        background: T.white, border: `1px solid ${T.border}`, borderRadius: 6,
+        padding: '4px 10px', fontSize: 11,
+      }}>
+        <span style={{ fontFamily: 'JetBrains Mono', fontSize: 9, color: T.inkLight, letterSpacing: 0.5 }}>AI Trust</span>
+        <span style={{ fontFamily: 'Sora', fontWeight: 700, color, fontSize: 13 }}>{pct}%</span>
+        <div style={{ width: 40, height: 4, borderRadius: 2, overflow: 'hidden', background: T.bgDark }}>
+          {stats.total > 0 && (
+            <>
+              <div style={{ width: `${(stats.accepted / stats.total) * 100}%`, height: '100%', background: T.safe, float: 'left' }} />
+              <div style={{ width: `${(stats.deferred / stats.total) * 100}%`, height: '100%', background: T.warn, float: 'left' }} />
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: '20px 24px' }}>
