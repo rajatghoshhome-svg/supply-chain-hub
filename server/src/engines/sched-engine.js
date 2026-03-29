@@ -201,3 +201,160 @@ export function runScheduler({
 
   return result;
 }
+
+/**
+ * Forward-schedule orders across multiple work centers, respecting
+ * changeover times and downtime windows.
+ *
+ * @param {Object} params
+ * @param {Map<string, Object[]>} params.ordersByWorkCenter - Orders pre-grouped by work center code
+ * @param {Map<string, number>} params.changeoverMatrix - 'fromFamId|toFamId' → changeover hours
+ * @param {Object[]} [params.downtimeEvents=[]] - { workCenter, startHr, endHr }
+ * @param {number} [params.startHour=0]
+ * @param {number} [params.hoursPerShift=8]
+ * @param {number} [params.shiftsPerDay=2]
+ * @returns {Map<string, Object[]>} wcCode → Order[] with startTime/endTime filled in
+ */
+export function forwardScheduleMultiResource({
+  ordersByWorkCenter,
+  changeoverMatrix,
+  downtimeEvents = [],
+  startHour = 0,
+  hoursPerShift = 8,
+  shiftsPerDay = 2,
+}) {
+  const result = new Map();
+
+  for (const [wcCode, orders] of ordersByWorkCenter) {
+    const wcDowntimes = downtimeEvents.filter(d => d.workCenter === wcCode);
+    let clock = startHour;
+    let prevFamilyId = null;
+    const scheduled = [];
+
+    for (const order of orders) {
+      // (a) Skip over any downtime window the clock falls into
+      for (const dt of wcDowntimes) {
+        if (clock >= dt.startHr && clock < dt.endHr) {
+          clock = dt.endHr;
+        }
+      }
+
+      // (b) Changeover time if family changed
+      if (prevFamilyId && order.familyId !== prevFamilyId) {
+        const key = `${prevFamilyId}|${order.familyId}`;
+        const changeover = changeoverMatrix.get(key) ?? 2.0;
+        clock += changeover;
+      }
+
+      // (c) Skip over downtime again after changeover bump
+      for (const dt of wcDowntimes) {
+        if (clock >= dt.startHr && clock < dt.endHr) {
+          clock = dt.endHr;
+        }
+      }
+
+      // (d) Processing time
+      const processingHrs = order.qty / order.unitsPerHour;
+
+      // (e) Assign times
+      order.startTime = clock;
+      order.endTime = clock + processingHrs;
+
+      // (f) Advance clock
+      clock = order.endTime;
+      prevFamilyId = order.familyId;
+
+      scheduled.push(order);
+    }
+
+    result.set(wcCode, scheduled);
+  }
+
+  return result;
+}
+
+/**
+ * Link two scheduling stages so that second-stage orders cannot start
+ * until their matching first-stage order completes plus a buffer.
+ *
+ * If pushing an order forward causes it to overlap with later orders
+ * on the same work center, those later orders are cascade-shifted.
+ *
+ * @param {Map<string, Object[]>} firstStageSchedule - wcCode → Order[]
+ * @param {Map<string, Object[]>} secondStageSchedule - wcCode → Order[]
+ * @param {number} [bufferHrs=2]
+ * @returns {Map<string, Object[]>} Adjusted secondStageSchedule
+ */
+export function linkStages(firstStageSchedule, secondStageSchedule, bufferHrs = 2) {
+  // Build lookup: orderId → first-stage order
+  const firstStageByOrderId = new Map();
+  for (const [, orders] of firstStageSchedule) {
+    for (const order of orders) {
+      firstStageByOrderId.set(order.orderId, order);
+    }
+  }
+
+  // Adjust second stage
+  for (const [wcCode, orders] of secondStageSchedule) {
+    for (let i = 0; i < orders.length; i++) {
+      const order = orders[i];
+      const firstOrder = firstStageByOrderId.get(order.orderId);
+      if (!firstOrder) continue;
+
+      const earliestStart = firstOrder.endTime + bufferHrs;
+      if (order.startTime < earliestStart) {
+        const duration = order.endTime - order.startTime;
+        order.startTime = earliestStart;
+        order.endTime = earliestStart + duration;
+
+        // Cascade-shift later orders on this work center
+        for (let j = i + 1; j < orders.length; j++) {
+          const prev = orders[j - 1];
+          if (orders[j].startTime < prev.endTime) {
+            const dur = orders[j].endTime - orders[j].startTime;
+            orders[j].startTime = prev.endTime;
+            orders[j].endTime = prev.endTime + dur;
+          }
+        }
+      }
+    }
+  }
+
+  return secondStageSchedule;
+}
+
+/**
+ * Greedy nearest-neighbor heuristic to minimize total changeover time.
+ *
+ * Starts with the first order and greedily picks the next order that
+ * has the lowest changeover cost from the current order's family.
+ *
+ * @param {Object[]} orders - Orders with familyId property
+ * @param {Map<string, number>} changeoverMatrix - 'fromFamId|toFamId' → changeover hours
+ * @returns {Object[]} Reordered copy of orders
+ */
+export function minimizeChangeover(orders, changeoverMatrix) {
+  if (!orders || orders.length <= 1) return orders ? [...orders] : [];
+
+  const result = [orders[0]];
+  const remaining = orders.slice(1);
+
+  while (remaining.length > 0) {
+    const current = result[result.length - 1];
+    let bestIdx = 0;
+    let bestCost = Infinity;
+
+    for (let i = 0; i < remaining.length; i++) {
+      const key = `${current.familyId}|${remaining[i].familyId}`;
+      const cost = changeoverMatrix.get(key) ?? 2.0;
+      if (cost < bestCost) {
+        bestCost = cost;
+        bestIdx = i;
+      }
+    }
+
+    result.push(remaining.splice(bestIdx, 1)[0]);
+  }
+
+  return result;
+}

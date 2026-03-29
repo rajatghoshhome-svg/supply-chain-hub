@@ -136,16 +136,22 @@ export const dcCustomerAllocation = {
 
 // ── Work centers per plant ──
 export const workCenters = [
-  // DogStar Kitchens
-  { code: 'WC-DS-EXTRUDE', plant: 'PLT-DOGSTAR', name: 'Extrusion Line 1', capacityHrsPerPeriod: 120, type: 'extrusion' },
-  { code: 'WC-DS-EXTR2',   plant: 'PLT-DOGSTAR', name: 'Extrusion Line 2', capacityHrsPerPeriod: 120, type: 'extrusion' },
-  { code: 'WC-DS-COAT',    plant: 'PLT-DOGSTAR', name: 'Coating & Enrobing', capacityHrsPerPeriod: 80,  type: 'coating' },
-  { code: 'WC-DS-FD',      plant: 'PLT-DOGSTAR', name: 'Freeze-Dry Chamber', capacityHrsPerPeriod: 60,  type: 'freeze-dry' },
-  { code: 'WC-DS-PACK',    plant: 'PLT-DOGSTAR', name: 'Packaging Line',     capacityHrsPerPeriod: 100, type: 'packaging' },
-  // NorthStar Kitchen
-  { code: 'WC-NS-EXTRUDE', plant: 'PLT-NORTHSTAR', name: 'Extrusion Line',   capacityHrsPerPeriod: 100, type: 'extrusion' },
-  { code: 'WC-NS-RETORT',  plant: 'PLT-NORTHSTAR', name: 'Retort (Wet Line)', capacityHrsPerPeriod: 80,  type: 'retort' },
-  { code: 'WC-NS-PACK',    plant: 'PLT-NORTHSTAR', name: 'Packaging Line',    capacityHrsPerPeriod: 80,  type: 'packaging' },
+  // DogStar Kitchens — 4 extruders, 1 coating, 1 freeze-dry, 3 packaging = 9 WCs
+  { code: 'WC-DS-EXT1', plant: 'PLT-DOGSTAR', name: 'Extruder 1', capacityHrsPerPeriod: 120, type: 'extrusion', stage: 'extrusion' },
+  { code: 'WC-DS-EXT2', plant: 'PLT-DOGSTAR', name: 'Extruder 2', capacityHrsPerPeriod: 120, type: 'extrusion', stage: 'extrusion' },
+  { code: 'WC-DS-EXT3', plant: 'PLT-DOGSTAR', name: 'Extruder 3', capacityHrsPerPeriod: 100, type: 'extrusion', stage: 'extrusion' },
+  { code: 'WC-DS-EXT4', plant: 'PLT-DOGSTAR', name: 'Extruder 4', capacityHrsPerPeriod: 80,  type: 'extrusion', stage: 'extrusion' },
+  { code: 'WC-DS-COAT', plant: 'PLT-DOGSTAR', name: 'Coating & Enrobing', capacityHrsPerPeriod: 80, type: 'coating', stage: 'intermediate' },
+  { code: 'WC-DS-FD',   plant: 'PLT-DOGSTAR', name: 'Freeze-Dry Chamber', capacityHrsPerPeriod: 60, type: 'freeze-dry', stage: 'intermediate' },
+  { code: 'WC-DS-PKG1', plant: 'PLT-DOGSTAR', name: 'Packaging Line 1', capacityHrsPerPeriod: 100, type: 'packaging', stage: 'packaging' },
+  { code: 'WC-DS-PKG2', plant: 'PLT-DOGSTAR', name: 'Packaging Line 2', capacityHrsPerPeriod: 80,  type: 'packaging', stage: 'packaging' },
+  { code: 'WC-DS-PKG3', plant: 'PLT-DOGSTAR', name: 'Packaging Line 3', capacityHrsPerPeriod: 80,  type: 'packaging', stage: 'packaging' },
+  // NorthStar Kitchen — 2 extruders, 1 retort, 2 packaging = 5 WCs
+  { code: 'WC-NS-EXT1',   plant: 'PLT-NORTHSTAR', name: 'Extruder 1', capacityHrsPerPeriod: 100, type: 'extrusion', stage: 'extrusion' },
+  { code: 'WC-NS-EXT2',   plant: 'PLT-NORTHSTAR', name: 'Extruder 2', capacityHrsPerPeriod: 80,  type: 'extrusion', stage: 'extrusion' },
+  { code: 'WC-NS-RETORT', plant: 'PLT-NORTHSTAR', name: 'Retort (Wet Line)', capacityHrsPerPeriod: 80, type: 'retort', stage: 'extrusion' },
+  { code: 'WC-NS-PKG1',   plant: 'PLT-NORTHSTAR', name: 'Packaging Line 1', capacityHrsPerPeriod: 80, type: 'packaging', stage: 'packaging' },
+  { code: 'WC-NS-PKG2',   plant: 'PLT-NORTHSTAR', name: 'Packaging Line 2', capacityHrsPerPeriod: 60, type: 'packaging', stage: 'packaging' },
 ];
 
 // ── Unified network locations (for map/dashboard views) ──
@@ -174,4 +180,43 @@ export function getNetworkLocations() {
     });
   }
   return locs;
+}
+
+// ── Production routes by format ──
+// Defines the stage sequence for each product format
+export const productionRoutes = {
+  'dry':          ['extrusion', 'coating', 'packaging'],
+  'wet':          ['retort', 'packaging'],
+  'freeze-dried': ['extrusion', 'freeze-dry', 'packaging'],
+  'treat':        ['extrusion', 'packaging'],
+};
+
+// ── Default changeover matrix rules ──
+// Hours needed to switch between product families on a work center
+export const defaultChangeoverRules = {
+  sameFamily: 0,                // Same product family → no changeover
+  sameBrandDiffFamily: 0.5,     // Same brand (ORIJEN→ORIJEN or ACANA→ACANA) different family
+  diffBrandSameFormat: 1.0,     // Different brand, same format (e.g. ORI dry → ACA dry)
+  diffFormat: 2.0,              // Different format entirely (e.g. dry → wet)
+};
+
+// ── Brand color mapping for Gantt chart ──
+export const brandColors = {
+  'ORIJEN': '#C8102E',
+  'ACANA': '#00563F',
+};
+
+// Helper: get brand from familyId
+export function getBrandFromFamily(familyId) {
+  return familyId.startsWith('ORI') ? 'ORIJEN' : 'ACANA';
+}
+
+// Helper: get format from familyId
+export function getFormatFromFamily(familyId) {
+  const map = {
+    'ORI-DOG-DRY': 'dry', 'ORI-CAT-DRY': 'dry', 'ACA-DOG-DRY': 'dry', 'ACA-CAT-DRY': 'dry',
+    'ORI-FD': 'freeze-dried', 'ORI-TREAT': 'treat',
+    'ACA-WET-DOG': 'wet', 'ACA-WET-CAT': 'wet', 'ACA-SINGLES': 'dry',
+  };
+  return map[familyId] || 'dry';
 }

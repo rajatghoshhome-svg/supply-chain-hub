@@ -22,6 +22,7 @@ import { requestId, errorHandler } from './middleware/error-handler.js';
 import { initialize as initChampionStore } from './data/champion-store.js';
 import { initialize as initDrpStore } from './data/champion-drp-store.js';
 import { initialize as initProductionStore } from './data/champion-production-store.js';
+import { initialize as initSchedulingStore } from './data/champion-scheduling-store.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -57,6 +58,7 @@ app.use(errorHandler);
 initChampionStore();
 initDrpStore();
 initProductionStore();
+initSchedulingStore();
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);

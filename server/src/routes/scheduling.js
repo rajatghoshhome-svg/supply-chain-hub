@@ -14,7 +14,8 @@
  */
 
 import { Router } from 'express';
-import { runScheduler, forwardSchedule, calculateMakespan } from '../engines/sched-engine.js';
+import { runScheduler, forwardSchedule, calculateMakespan, minimizeChangeover } from '../engines/sched-engine.js';
+import * as schedStore from '../data/champion-scheduling-store.js';
 import { runProductionPlan } from '../engines/prod-plan-engine.js';
 import { runDRP } from '../engines/drp-engine.js';
 import { buildSchedulingContext } from '../services/ai-context/scheduling-context.js';
@@ -477,6 +478,140 @@ schedulingRouter.put('/resequence', (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Champion Pet Foods — Scheduling Endpoints
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** GET /api/scheduling/champion/schedule/:plantCode — Full Gantt data */
+schedulingRouter.get('/champion/schedule/:plantCode', (req, res) => {
+  try {
+    const data = schedStore.getSchedule(req.params.plantCode);
+    if (!data) return res.status(404).json({ error: 'Plant not found or schedule not generated' });
+    // Enrich with changeover matrix (as flat object) and downtime events
+    const cmRaw = schedStore.getChangeoverMatrix(req.params.plantCode);
+    const changeoverMatrix = {};
+    if (cmRaw?.entries) {
+      for (const e of cmRaw.entries) {
+        changeoverMatrix[`${e.fromFamily}|${e.toFamily}`] = e.hours;
+      }
+    }
+    const downtimeEvents = schedStore.getDowntimeEvents(req.params.plantCode) || [];
+    res.json({ ...data, changeoverMatrix, downtimeEvents });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/** POST /api/scheduling/champion/generate/:plantCode — Generate from firmed plan */
+schedulingRouter.post('/champion/generate/:plantCode', (req, res) => {
+  try {
+    schedStore.generateFromFirmedPlan(req.params.plantCode);
+    const data = schedStore.getSchedule(req.params.plantCode);
+    res.json(data);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/** PUT /api/scheduling/champion/resequence — Drag-and-drop reorder */
+schedulingRouter.put('/champion/resequence', (req, res) => {
+  try {
+    const { plantCode, workCenter, orderIds } = req.body;
+    if (!plantCode || !workCenter || !orderIds) {
+      return res.status(400).json({ error: 'plantCode, workCenter, and orderIds required' });
+    }
+    schedStore.resequenceOrders(plantCode, workCenter, orderIds);
+    const data = schedStore.getSchedule(plantCode);
+    res.json(data);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/** POST /api/scheduling/champion/optimize/:plantCode — Changeover minimization */
+schedulingRouter.post('/champion/optimize/:plantCode', (req, res) => {
+  try {
+    const { workCenter } = req.body || {};
+    schedStore.optimizeSequence(req.params.plantCode, workCenter);
+    const data = schedStore.getSchedule(req.params.plantCode);
+    res.json(data);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/** GET /api/scheduling/champion/execution/:plantCode — Live execution data */
+schedulingRouter.get('/champion/execution/:plantCode', (req, res) => {
+  try {
+    const data = schedStore.getExecutionStatus(req.params.plantCode);
+    if (!data) return res.status(404).json({ error: 'No execution data' });
+    res.json(data);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/** GET /api/scheduling/champion/changeover/:plantCode — Changeover matrix */
+schedulingRouter.get('/champion/changeover/:plantCode', (req, res) => {
+  try {
+    const data = schedStore.getChangeoverMatrix(req.params.plantCode);
+    if (!data) return res.status(404).json({ error: 'No changeover matrix' });
+    res.json(data);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/** PUT /api/scheduling/champion/changeover — Update matrix entry */
+schedulingRouter.put('/champion/changeover', (req, res) => {
+  try {
+    const { plantCode, fromFam, toFam, hours } = req.body;
+    if (!plantCode || !fromFam || !toFam || hours === undefined) {
+      return res.status(400).json({ error: 'plantCode, fromFam, toFam, hours required' });
+    }
+    schedStore.updateChangeoverEntry(plantCode, fromFam, toFam, hours);
+    res.json({ status: 'ok' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/** GET /api/scheduling/champion/downtime/:plantCode — Downtime events */
+schedulingRouter.get('/champion/downtime/:plantCode', (req, res) => {
+  try {
+    const data = schedStore.getDowntimeEvents(req.params.plantCode);
+    res.json({ events: data || [] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/** POST /api/scheduling/champion/downtime — Add downtime event */
+schedulingRouter.post('/champion/downtime', (req, res) => {
+  try {
+    const { plantCode, workCenter, type, startHr, endHr, reason } = req.body;
+    if (!plantCode || !workCenter) {
+      return res.status(400).json({ error: 'plantCode and workCenter required' });
+    }
+    schedStore.addDowntimeEvent(plantCode, workCenter, type || 'maintenance', startHr || 0, endHr || 8, reason || '');
+    res.json({ status: 'ok', events: schedStore.getDowntimeEvents(plantCode) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/** DELETE /api/scheduling/champion/downtime/:eventId — Remove downtime event */
+schedulingRouter.delete('/champion/downtime/:eventId', (req, res) => {
+  try {
+    // Need plantCode from query param
+    const plantCode = req.query.plantCode || 'PLT-DOGSTAR';
+    schedStore.removeDowntimeEvent(plantCode, req.params.eventId);
+    res.json({ status: 'ok' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/** GET /api/scheduling/champion/config/:plantCode — Sequencing rule config */
+schedulingRouter.get('/champion/config/:plantCode', (req, res) => {
+  try {
+    const rule = schedStore.getSequencingRule(req.params.plantCode);
+    res.json({ rule: rule || 'EDD' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/** PUT /api/scheduling/champion/config — Update sequencing rule */
+schedulingRouter.put('/champion/config', (req, res) => {
+  try {
+    const { plantCode, rule } = req.body;
+    if (!plantCode || !rule) {
+      return res.status(400).json({ error: 'plantCode and rule required' });
+    }
+    schedStore.setSequencingRule(plantCode, rule);
+    res.json({ status: 'ok', rule });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 function makePeriods(count) {
