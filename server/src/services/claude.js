@@ -34,6 +34,23 @@ import {
 } from './data-provider.js';
 import { plantBOMs, getSkuByCode } from './data-provider.js';
 
+// Champion Pet Foods data store
+import {
+  getStoreSummary,
+  getSkuIdsForLevel,
+  getHistory,
+  getStatForecast,
+  getAccuracyMetrics,
+  isInitialized as isChampionInitialized,
+} from '../data/champion-store.js';
+import {
+  brands as championBrands,
+  families as championFamilies,
+  lines as championLines,
+  products as championProducts,
+  skus as championSkus,
+} from '../data/champion-catalog.js';
+
 // Per-module context builders
 import { buildDemandChatContext } from './ai-context/demand-context.js';
 import { buildDRPChatContext } from './ai-context/drp-context.js';
@@ -46,20 +63,34 @@ const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const MODEL = 'claude-sonnet-4-5-20250514';
 
 function buildPreamble() {
-  return `You are an AI supply chain planning assistant embedded in an ASCM/APICS-compliant Manufacturing Planning and Control (MPC) platform.
+  // Pull live store summary if Champion store is initialized
+  let storeLine = '';
+  if (isChampionInitialized()) {
+    const summary = getStoreSummary();
+    storeLine = `\nCOMPANY DATA: Champion Pet Foods — ${summary.brands} brands, ${summary.families} families, ${summary.lines} lines, ${summary.products} products, ${summary.skus} SKUs across ${summary.customers} customers. ${summary.plants} plants, ${summary.dcs} DCs. ${summary.totalForecasts} active forecasts (${summary.totalOverrides} overrides).`;
+  }
 
-You serve small and mid-size manufacturers ($50M-$500M revenue) running electric motor production across 3 plants, 3 DCs, and 11 products.
+  return `You are an AI supply chain planning assistant embedded in an ASCM/APICS-compliant planning platform for Champion Pet Foods.
+
+Champion Pet Foods is a premium pet nutrition company with two flagship brands:
+  - ORIJEN: Biologically Appropriate, premium-tier dog and cat food (dry, freeze-dried, treats)
+  - ACANA: Heritage-class, high-quality dog and cat food (dry, wet)
+
+PRODUCT HIERARCHY: Brand → Family → Line → Product → SKU (size variant)
+  Example: ORIJEN → Dry Dog Food → Core → Original → ORI-ORIG-25 (25 lb bag)
+${storeLine}
 
 ASCM MPC CASCADE:
   Demand Plan → DRP → S&OP/Production Plan → MPS (RCCP) → [MRP + Scheduling ⟲]
 
 KEY PRINCIPLES:
+- Weekly planning buckets with 104-week history and 52-week forecast horizon
 - DRP assigns demand to plants; MRP explodes plant-specific BOMs
 - MPS does rough-cut capacity planning; Scheduling creates Gantt-level sequences
-- Closed loop: Scheduling timing shifts → MRP material needs adjust → signals back to MPS
-- MTR-200 is dual-sourced: PLANT-NORTH (ROT-A standard rotor) and PLANT-SOUTH (ROT-B heavy-duty)
+- Forecasts are generated per SKU × customer combination, aggregatable at any hierarchy level
+- Top movers include ORIJEN Original, ACANA Wild Prairie, ORIJEN Amazing Grains Original
 
-Be concise and data-driven. Cite specific SKU codes, plants, periods, and quantities.
+Be concise and data-driven. Cite specific product names, SKU IDs, hierarchy levels, and quantities.
 Format responses with markdown for readability.
 When recommending actions, include specific numbers and rationale.
 NEVER fabricate data — only reference what's in the context provided.`;
@@ -266,6 +297,16 @@ function buildModuleContext(module) {
   const builders = {
     demand: () => buildDemandChatContext({
       products, productFamilies, liveData,
+      championStore: isChampionInitialized() ? {
+        summary: getStoreSummary(),
+        brands: championBrands,
+        families: championFamilies,
+        lines: championLines,
+        products: championProducts,
+        skus: championSkus,
+        getAccuracyMetrics,
+        getSkuIdsForLevel,
+      } : null,
     }),
     drp: () => buildDRPChatContext({
       plants, dcs, products, networkLanes, liveData,

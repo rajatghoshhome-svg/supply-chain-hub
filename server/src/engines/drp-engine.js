@@ -276,3 +276,150 @@ export function fairShareAllocation({ available, demands }) {
     allocated,
   }));
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// New functions for Champion DRP: transit type, move-vs-make, calendar
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Recommend transit type for a lane based on distance, volume, and rail access.
+ *
+ * @param {Object} lane - Lane data with distanceMiles, hasRailAccess, mode
+ * @param {number} pallets - Number of pallets in this shipment
+ * @returns {{ recommended: string, reasoning: string, costEstimate: number }}
+ */
+export function recommendTransitType(lane, pallets = 0) {
+  if (lane.mode === 'STO') {
+    return {
+      recommended: 'STO',
+      reasoning: 'DC-to-DC stock transfer order',
+      costEstimate: lane.distanceMiles * (lane.truckCostPerMile || 2.85),
+    };
+  }
+
+  if (lane.distanceMiles > 1000 && pallets > 15 && lane.hasRailAccess && lane.railCostPerMile) {
+    const railCost = lane.distanceMiles * lane.railCostPerMile;
+    const truckCost = lane.distanceMiles * (lane.truckCostPerMile || 2.85);
+    return {
+      recommended: 'rail',
+      reasoning: `${lane.distanceMiles} miles with ${pallets} pallets. Rail saves $${Math.round(truckCost - railCost).toLocaleString()} vs truck.`,
+      costEstimate: railCost,
+      truckCostEstimate: truckCost,
+      savings: Math.round(truckCost - railCost),
+    };
+  }
+
+  return {
+    recommended: 'truck',
+    reasoning: lane.distanceMiles <= 1000
+      ? `Short haul (${lane.distanceMiles} miles) — truck is most efficient`
+      : pallets <= 15
+        ? `Only ${pallets} pallets — not enough volume to justify rail`
+        : `No rail access at destination`,
+    costEstimate: lane.distanceMiles * (lane.truckCostPerMile || 2.85),
+  };
+}
+
+/**
+ * Compare move (DC-to-DC transfer) vs make (new production + ship) for a SKU.
+ *
+ * @param {Object} params
+ * @param {string} params.skuName - Product name for display
+ * @param {number} params.qty - Units needed
+ * @param {number} params.unitWeight - Lbs per unit
+ * @param {number} params.unitCost - Production cost per unit
+ * @param {Object} params.moveLane - DC-to-DC lane data
+ * @param {Object} params.plantLane - Plant-to-destination-DC lane data
+ * @param {number} params.handlingCostPerPallet - Default $2
+ * @param {number} params.palletsPerUnit - Default 0.02 (50 units per pallet)
+ * @returns {{ moveOption, makeOption, recommendation, savingsPercent }}
+ */
+export function moveVsMakeAnalysis({
+  skuName = '',
+  qty,
+  unitWeight = 25,
+  unitCost = 50,
+  moveLane,
+  plantLane,
+  handlingCostPerPallet = 50,
+  palletsPerUnit = 0.02,
+}) {
+  const totalWeight = qty * unitWeight;
+  const totalPallets = Math.ceil(qty * palletsPerUnit);
+
+  // Move option: transfer from one DC to another
+  const moveTransitCost = totalWeight * (moveLane.costPerLb || 0.10);
+  const moveHandlingCost = totalPallets * handlingCostPerPallet;
+  const moveCost = moveTransitCost + moveHandlingCost;
+
+  const moveOption = {
+    cost: Math.round(moveCost),
+    leadTimeDays: moveLane.leadTimeDays,
+    steps: [
+      { label: 'Pick & pack at source DC', cost: moveHandlingCost, days: 0.5 },
+      { label: `Transit ${moveLane.from} → ${moveLane.to} (${moveLane.distanceMiles} mi)`, cost: moveTransitCost, days: moveLane.leadTimeDays },
+      { label: 'Receive at destination DC', cost: 0, days: 0.5 },
+    ],
+    riskFactors: ['Depletes source DC inventory', 'No new product created'],
+  };
+
+  // Make option: produce at plant and ship to destination
+  const productionCost = qty * unitCost;
+  const makeTransitCost = totalWeight * (plantLane.costPerLb || 0.12);
+  const makeCost = productionCost + makeTransitCost;
+
+  const makeOption = {
+    cost: Math.round(makeCost),
+    leadTimeDays: plantLane.leadTimeDays + 3, // +3 days production lead time
+    steps: [
+      { label: 'Production at plant', cost: productionCost, days: 3 },
+      { label: `Transit ${plantLane.from} → ${plantLane.to} (${plantLane.distanceMiles} mi)`, cost: makeTransitCost, days: plantLane.leadTimeDays },
+      { label: 'Receive at destination DC', cost: 0, days: 0.5 },
+    ],
+    riskFactors: ['Requires plant capacity', 'Longer lead time'],
+  };
+
+  const recommendation = moveCost <= makeCost ? 'move' : 'make';
+  const cheaper = Math.min(moveCost, makeCost);
+  const pricier = Math.max(moveCost, makeCost);
+  const savingsPercent = pricier > 0 ? Math.round(((pricier - cheaper) / pricier) * 100) : 0;
+
+  return {
+    moveOption,
+    makeOption,
+    recommendation,
+    savingsPercent,
+    savingsAmount: Math.round(pricier - cheaper),
+  };
+}
+
+/**
+ * Adjust planned shipment release dates to align with shipping calendar.
+ *
+ * @param {number[]} plannedReleases - Planned quantities per period (week)
+ * @param {Object} calendar - { shipDays: [1,3,5], frequency }
+ * @param {string} startDate - ISO date of first period
+ * @returns {Object[]} Adjusted releases with ship dates
+ */
+export function applyShippingCalendar(plannedReleases, calendar, startDate) {
+  if (!calendar || !calendar.shipDays || calendar.shipDays.length === 0) {
+    return plannedReleases.map((qty, i) => ({ period: i, qty, shipDay: null }));
+  }
+
+  return plannedReleases.map((qty, i) => {
+    if (qty <= 0) return { period: i, qty: 0, shipDay: null };
+
+    // Find the next available ship day in this period's week
+    const weekStart = new Date(startDate);
+    weekStart.setDate(weekStart.getDate() + i * 7);
+    const weekDay = weekStart.getDay(); // 0=Sun, 1=Mon...
+
+    // Find closest ship day (1-based: 1=Mon)
+    let bestDay = calendar.shipDays[0];
+    for (const sd of calendar.shipDays) {
+      if (sd >= weekDay) { bestDay = sd; break; }
+    }
+
+    return { period: i, qty, shipDay: bestDay };
+  });
+}

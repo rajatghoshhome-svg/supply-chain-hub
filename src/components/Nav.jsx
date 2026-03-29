@@ -9,7 +9,6 @@ const NAV_ITEMS = [
   ['/scheduling', 'Scheduling'],
   ['/mrp', 'Materials'],
   ['/decisions', 'Decisions'],
-  ['/agent', 'Agent'],
 ];
 
 export default function Nav() {
@@ -35,10 +34,17 @@ export default function Nav() {
           );
         })}
       </div>
-      <button onClick={() => navigate('/agent')} className="bp nav-cta"
-        style={{ background: T.ink, color: T.white, border: 'none', padding: '8px 20px', borderRadius: 7, cursor: 'pointer', fontSize: 13, fontWeight: 500, fontFamily: 'Sora', letterSpacing: -0.1, transition: 'opacity 0.15s', minHeight: 44 }}>
-        Ask Agent
-      </button>
+      {/* Champion branding badge */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '6px 14px', borderRadius: 7,
+        background: T.champion || '#1B365D', color: T.white,
+        fontFamily: T.fontHeading, fontSize: 12, fontWeight: 500,
+        letterSpacing: -0.2,
+      }}>
+        <span style={{ fontSize: 14 }}>🐾</span>
+        Champion Pet Foods
+      </div>
     </nav>
   );
 }

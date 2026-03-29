@@ -330,3 +330,97 @@ export function bestFit({ history, periods, seasonLength = 12 }) {
     })),
   };
 }
+
+// ─── 8. Aggregation ──────────────────────────────────────────────
+
+/**
+ * Element-wise sum of multiple demand arrays.
+ * All arrays should have the same length. Shorter arrays are zero-padded.
+ *
+ * @param {number[][]} childArrays - Array of demand arrays to sum
+ * @returns {number[]} Summed array
+ */
+export function aggregate(childArrays) {
+  if (!childArrays || childArrays.length === 0) return [];
+  const maxLen = Math.max(...childArrays.map(a => a.length));
+  const result = new Array(maxLen).fill(0);
+  for (const arr of childArrays) {
+    for (let i = 0; i < arr.length; i++) {
+      result[i] += arr[i] || 0;
+    }
+  }
+  return result;
+}
+
+// ─── 9. Disaggregation ──────────────────────────────────────────
+
+/**
+ * Distribute parent-level values proportionally to children based on historical mix.
+ *
+ * @param {number[]} parentValues - New values to distribute (e.g., [5000, 4800, ...])
+ * @param {number[][]} childMixes - Current child arrays used to determine proportions
+ * @returns {number[][]} New child arrays with distributed values
+ */
+export function disaggregate(parentValues, childMixes) {
+  if (!childMixes || childMixes.length === 0) return [];
+  if (!parentValues || parentValues.length === 0) return childMixes.map(c => [...c]);
+
+  const numChildren = childMixes.length;
+  const numPeriods = parentValues.length;
+  const result = childMixes.map(() => new Array(numPeriods).fill(0));
+
+  for (let p = 0; p < numPeriods; p++) {
+    const newTotal = parentValues[p];
+    let currentTotal = 0;
+    for (let c = 0; c < numChildren; c++) {
+      currentTotal += childMixes[c][p] || 0;
+    }
+
+    if (currentTotal === 0) {
+      // Even split when no historical data
+      const even = Math.round(newTotal / numChildren);
+      for (let c = 0; c < numChildren; c++) {
+        result[c][p] = even;
+      }
+    } else {
+      // Proportional split with remainder to last child
+      let remaining = newTotal;
+      for (let c = 0; c < numChildren; c++) {
+        if (c === numChildren - 1) {
+          result[c][p] = remaining;
+        } else {
+          const proportion = (childMixes[c][p] || 0) / currentTotal;
+          const allocated = Math.round(newTotal * proportion);
+          result[c][p] = allocated;
+          remaining -= allocated;
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
+// ─── 10. Accuracy Bars ──────────────────────────────────────────
+
+/**
+ * Build per-period accuracy comparison data for charting.
+ *
+ * @param {number[]} stat - Statistical forecast values
+ * @param {number[]} final_ - Final (planner-adjusted) forecast values
+ * @param {number[]} actual - Actual demand values
+ * @returns {{ period: number, stat: number|null, final: number|null, actual: number|null }[]}
+ */
+export function calculateAccuracyBars(stat, final_, actual) {
+  const maxLen = Math.max(stat?.length || 0, final_?.length || 0, actual?.length || 0);
+  const bars = [];
+  for (let i = 0; i < maxLen; i++) {
+    bars.push({
+      period: i,
+      stat: stat?.[i] != null ? Math.round(stat[i]) : null,
+      final: final_?.[i] != null ? Math.round(final_[i]) : null,
+      actual: actual?.[i] != null ? Math.round(actual[i]) : null,
+    });
+  }
+  return bars;
+}

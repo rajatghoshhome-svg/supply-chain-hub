@@ -337,4 +337,136 @@ function makePeriods(count) {
   return periods;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Champion DRP Endpoints — Distribution Planning, Load Manager, Move vs Make
+// ─────────────────────────────────────────────────────────────────────────────
+
+let _drpStore = null;
+async function getDrpStore() {
+  if (!_drpStore) _drpStore = await import('../data/champion-drp-store.js');
+  return _drpStore;
+}
+
+// GET /api/drp/distribution-plan — full distribution plan overview
+drpRouter.get('/distribution-plan', async (req, res, next) => {
+  try {
+    const s = await getDrpStore();
+    if (!s.isInitialized()) return res.status(503).json({ error: 'DRP store not initialized' });
+
+    res.json({
+      summary: s.getDistributionSummary(),
+      lanes: s.getLanes(),
+      demandSplits: s.getDemandSplits(),
+      calendars: s.getShippingCalendars(),
+      dcInventory: s.getDCInventory(),
+    });
+  } catch (err) { next(err); }
+});
+
+// GET /api/drp/recommended-shipments?lane=PLT-DOGSTAR|DC-ATL
+drpRouter.get('/recommended-shipments', async (req, res, next) => {
+  try {
+    const s = await getDrpStore();
+    const { lane } = req.query;
+    res.json({
+      shipments: s.getRecommendedShipments(lane || null),
+      pendingLoads: s.getPendingLoads(),
+      committedLoads: s.getCommittedLoads(),
+    });
+  } catch (err) { next(err); }
+});
+
+// POST /api/drp/combine-shipments — create pending load
+drpRouter.post('/combine-shipments', async (req, res, next) => {
+  try {
+    const s = await getDrpStore();
+    const { shipmentIds } = req.body;
+    const result = s.combineShipments(shipmentIds || []);
+    if (result.error) return res.status(400).json(result);
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/drp/pending-load/:loadId — uncombine pending load
+drpRouter.delete('/pending-load/:loadId', async (req, res, next) => {
+  try {
+    const s = await getDrpStore();
+    const result = s.uncommitLoad(req.params.loadId);
+    if (result.error) return res.status(404).json(result);
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+// POST /api/drp/commit-load — finalize load
+drpRouter.post('/commit-load', async (req, res, next) => {
+  try {
+    const s = await getDrpStore();
+    const { loadId } = req.body;
+    const result = s.commitLoad(loadId);
+    if (result.error) return res.status(404).json(result);
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+// GET /api/drp/committed-loads
+drpRouter.get('/committed-loads', async (req, res, next) => {
+  try {
+    const s = await getDrpStore();
+    res.json({ loads: s.getCommittedLoads() });
+  } catch (err) { next(err); }
+});
+
+// PUT /api/drp/demand-split — update family allocation across DCs
+drpRouter.put('/demand-split', async (req, res, next) => {
+  try {
+    const s = await getDrpStore();
+    const { familyId, allocations } = req.body;
+    const result = s.updateDemandSplit(familyId, allocations);
+    if (result.error) return res.status(400).json(result);
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+// PUT /api/drp/shipping-calendar — update calendar for a lane
+drpRouter.put('/shipping-calendar', async (req, res, next) => {
+  try {
+    const s = await getDrpStore();
+    const { laneKey, shipDays, frequency } = req.body;
+    const result = s.updateShippingCalendar(laneKey, { shipDays, frequency });
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+// GET /api/drp/move-vs-make/scenarios
+drpRouter.get('/move-vs-make/scenarios', async (req, res, next) => {
+  try {
+    const s = await getDrpStore();
+    res.json({ scenarios: s.getMoveVsMakeScenarios() });
+  } catch (err) { next(err); }
+});
+
+// GET /api/drp/move-vs-make/:scenarioId
+drpRouter.get('/move-vs-make/:scenarioId', async (req, res, next) => {
+  try {
+    const s = await getDrpStore();
+    const scenario = s.getMoveVsMakeDetail(req.params.scenarioId);
+    if (!scenario) return res.status(404).json({ error: 'Scenario not found' });
+    res.json(scenario);
+  } catch (err) { next(err); }
+});
+
+// POST /api/drp/move-vs-make/:scenarioId/execute
+drpRouter.post('/move-vs-make/:scenarioId/execute', async (req, res, next) => {
+  try {
+    const s = await getDrpStore();
+    const { decision } = req.body;
+    if (!['move', 'make'].includes(decision)) {
+      return res.status(400).json({ error: 'Decision must be "move" or "make"' });
+    }
+    const result = s.executeMoveVsMake(req.params.scenarioId, decision);
+    if (result.error) return res.status(400).json(result);
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
 // named export used by server/src/index.js

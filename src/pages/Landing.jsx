@@ -69,7 +69,7 @@ export default function Landing() {
     fetch('/api/drp/demo')
       .then(r => r.json())
       .then(d => setStats(d))
-      .catch(() => setStats({ skusPlanned: 11, locationsPlanned: 3, plantsServed: 3, totalExceptions: 2, criticalExceptions: 1 }));
+      .catch(() => setStats({ skusPlanned: 105, locationsPlanned: 3, plantsServed: 2, totalExceptions: 2, criticalExceptions: 1 }));
   }, []);
 
   // Fetch per-module health
@@ -116,8 +116,8 @@ export default function Landing() {
           </h1>
           <p style={{ fontSize: 15, color: T.inkMid, maxWidth: 600, lineHeight: 1.6, margin: '0 0 24px' }}>
             Deterministic ASCM/APICS planning engines + AI exception analysis.
-            Full cascade from demand forecast to material requirements across 3 plants,
-            3 distribution centers, and 11 products.
+            Full cascade from demand forecast to material requirements across 2 plants,
+            3 distribution centers, and 105 SKUs.
           </p>
           <div style={{ display: 'flex', gap: 12 }}>
             <button onClick={() => navigate('/demand')} className="bp"
@@ -138,9 +138,9 @@ export default function Landing() {
           <div style={{ maxWidth: 1200, margin: '0 auto' }}>
             <div className="landing-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', borderLeft: `1px solid ${T.border}` }}>
               {[
-                { label: 'Products',     value: stats.skusPlanned,       color: T.ink },
+                { label: 'SKUs',          value: stats.skusPlanned,       color: T.ink },
                 { label: 'DCs Planned',   value: stats.locationsPlanned,  color: T.ink },
-                { label: 'Plants',        value: stats.plantsServed || 3, color: T.ink },
+                { label: 'Plants',        value: stats.plantsServed || 2, color: T.ink },
                 { label: 'Exceptions',    value: stats.totalExceptions,   color: stats.totalExceptions > 0 ? T.warn : T.safe },
                 { label: 'Critical',      value: stats.criticalExceptions, color: stats.criticalExceptions > 0 ? T.risk : T.safe },
               ].map((m, i) => (

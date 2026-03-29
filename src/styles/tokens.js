@@ -30,11 +30,18 @@ export const T = {
   safe: '#2A5C42',
   safeBg: '#EBF2EE',
 
-  // ─── Channel colors ────────────────────────────────────
+  // ─── Champion Pet Foods brand colors ───────────────────
+  champion: '#1B365D',   // Champion navy
+  orijen: '#C8102E',     // Orijen red
+  acana: '#00563F',      // Acana green
+
+  // ─── Channel / customer colors ────────────────────────
+  petco: '#003DA5',
   walmart: '#0071CE',
   chewy: '#E55525',
   petsmart: '#E2001A',
   amazon: '#FF9900',
+  indie: '#6B7280',
   other: '#A0A0A0',
 
   // ─── Module colors ─────────────────────────────────────
