@@ -133,7 +133,7 @@ export default function MrpPage() {
     try {
       const statusMap = { accept: 'accepted', defer: 'deferred', dismiss: 'dismissed' };
       const actionLabel = action === 'accept' ? `Accept: ${exception.type}` : action === 'defer' ? `Defer: ${exception.type}` : `Dismiss: ${exception.type}`;
-      await fetch('/api/decisions', {
+      const resp = await fetch('/api/decisions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -152,6 +152,7 @@ export default function MrpPage() {
           status: statusMap[action],
         }),
       });
+      if (!resp.ok) throw new Error(`Decision API returned ${resp.status}`);
       setResolvedExceptions(prev => ({ ...prev, [index]: { status: statusMap[action], action } }));
     } catch (err) {
       console.error('Failed to log decision:', err);

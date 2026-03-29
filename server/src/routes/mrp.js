@@ -246,7 +246,7 @@ mrpRouter.get('/demo', (req, res) => {
 
     // Attach per-exception financial impact and cross-module traceability
     mrpResults.forEach(r => {
-      r.exceptions = attachFinancialImpacts(r.exceptions);
+      r.exceptions = attachFinancialImpacts(r.exceptions || []);
       // Add source traceability for cross-module navigation
       r.exceptions.forEach(exc => {
         if (!exc.sourceModule) {

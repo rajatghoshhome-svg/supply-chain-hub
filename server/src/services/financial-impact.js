@@ -70,16 +70,16 @@ export function calculateExceptionImpact(exception, costs = DEFAULT_COSTS) {
     amount = qty * costs.stockoutPerUnit;
     impactType = 'risk';
   } else if (type.includes('reschedule-in')) {
-    amount = qty * 7.5; // moderate disruption cost
+    amount = qty * (costs.reschedulePerUnit || 7.5);
     impactType = 'cost';
   } else if (type.includes('reschedule-out')) {
-    amount = qty * 2.5; // carrying cost savings opportunity
+    amount = qty * (costs.rescheduleOutPerUnit || 2.5); // carrying cost savings opportunity
     impactType = 'cost-avoidance';
   } else if (type.includes('capacity') || type.includes('overload')) {
     amount = (exception.hours || 8) * costs.overtimePerHour;
     impactType = 'cost';
   } else if (type.includes('cancel')) {
-    amount = qty * 7.5;
+    amount = qty * (costs.cancelPerUnit || 7.5);
     impactType = 'savings';
   } else {
     // Generic exception
