@@ -6,14 +6,14 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["vite", "--port", "5173"],
       "port": 5173,
-      "cwd": "/Users/raj/supply-chain-hub"
+      "cwd": "/Users/raj/supply-chain-hub/.claude/worktrees/cool-kare"
     },
     {
       "name": "api-server",
       "runtimeExecutable": "node",
       "runtimeArgs": ["server/src/index.js"],
       "port": 3001,
-      "cwd": "/Users/raj/supply-chain-hub"
+      "cwd": "/Users/raj/supply-chain-hub/.claude/worktrees/cool-kare"
     }
   ]
 }

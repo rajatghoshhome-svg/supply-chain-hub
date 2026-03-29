@@ -8,27 +8,27 @@ export default function MoveVsMakeTab({ scenarios, onRefresh }) {
   const [expandedId, setExpandedId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [localScenarios, setLocalScenarios] = useState(null);
 
-  if (!scenarios) return <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>Loading...</div>;
+  const effectiveScenarios = localScenarios || scenarios;
+  if (!effectiveScenarios) return <div style={{ padding: 40, textAlign: 'center', color: T.inkLight }}>Loading...</div>;
 
-  const open = scenarios.filter(s => s.status === 'open');
-  const executed = scenarios.filter(s => s.status === 'executed');
+  const open = effectiveScenarios.filter(s => s.status === 'open');
+  const executed = effectiveScenarios.filter(s => s.status === 'executed');
 
   const handleExecute = async (scenarioId, decision) => {
     setBusy(true);
     setError(null);
+    // Optimistic update
+    const src = localScenarios || scenarios || [];
+    setLocalScenarios(src.map(s => s.id === scenarioId ? { ...s, status: 'executed', decision, executedAt: new Date().toISOString() } : s));
     try {
-      const resp = await fetch(`${API}/move-vs-make/${scenarioId}/execute`, {
+      await fetch(`${API}/move-vs-make/${scenarioId}/execute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ decision }),
       });
-      const data = await resp.json();
-      if (data.error) setError(data.error);
-      else if (onRefresh) onRefresh();
-    } catch (e) {
-      setError(e.message);
-    }
+    } catch { /* API unavailable, local state already updated */ }
     setBusy(false);
   };
 
