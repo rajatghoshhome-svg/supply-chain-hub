@@ -511,6 +511,26 @@ schedulingRouter.post('/champion/generate/:plantCode', (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+/** POST /api/scheduling/champion/order — Add a new process order */
+schedulingRouter.post('/champion/order', (req, res) => {
+  try {
+    const { plantCode, familyId, qty, workCenter, priority } = req.body;
+    if (!plantCode || !familyId || !qty) {
+      return res.status(400).json({ error: 'plantCode, familyId, and qty required' });
+    }
+    const result = schedStore.addProcessOrder(plantCode, { familyId, qty: Number(qty), workCenter, priority });
+    if (result.error) return res.status(400).json(result);
+    // Enrich response with changeover matrix and downtime
+    const cmRaw = schedStore.getChangeoverMatrix(plantCode);
+    const changeoverMatrix = {};
+    if (cmRaw?.entries) {
+      for (const e of cmRaw.entries) changeoverMatrix[`${e.fromFamily}|${e.toFamily}`] = e.hours;
+    }
+    const downtimeEvents = schedStore.getDowntimeEvents(plantCode) || [];
+    res.json({ ...result.schedule, changeoverMatrix, downtimeEvents });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 /** PUT /api/scheduling/champion/resequence — Drag-and-drop reorder */
 schedulingRouter.put('/champion/resequence', (req, res) => {
   try {

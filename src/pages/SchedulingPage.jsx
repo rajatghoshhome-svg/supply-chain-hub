@@ -263,6 +263,17 @@ export default function SchedulingPage() {
     }
   };
 
+  const handleAddOrder = async ({ familyId, qty, workCenter, priority }) => {
+    try {
+      const res = await fetch(`${API}/order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plantCode: plant, familyId, qty, workCenter, priority }),
+      });
+      if (res.ok) { const data = await res.json(); if (data.schedule) setSchedule(data.schedule); else fetchSchedule(); }
+    } catch { fetchSchedule(); }
+  };
+
   const handleRemoveDowntime = async (eventId) => {
     try {
       await fetch(`${API}/downtime/${eventId}`, { method: 'DELETE' });
@@ -349,6 +360,7 @@ export default function SchedulingPage() {
           onResequence={handleResequence}
           onOptimize={handleOptimize}
           onRefresh={fetchSchedule}
+          onAddOrder={handleAddOrder}
         />
       )}
 

@@ -1092,6 +1092,81 @@ export function setSequencingRule(plantCode, rule) {
 }
 
 /**
+ * Add a new process order to a plant's schedule.
+ */
+export function addProcessOrder(plantCode, { familyId, qty, workCenter, priority }) {
+  const orders = _processOrders.get(plantCode);
+  if (!orders) return { error: 'Plant not found' };
+
+  const format = getFormatFromFamily(familyId);
+  const brand = getBrandFromFamily(familyId);
+  const familyName = getFamilyName(familyId);
+  const brandColor = brandColors[brand] || '#888';
+
+  // Generate unique id
+  const prefix = plantCode === 'PLT-DOGSTAR' ? 'DS' : 'NS';
+  const maxNum = orders
+    .filter(o => o.id.startsWith(`PO-${prefix}-`))
+    .reduce((max, o) => {
+      const n = parseInt(o.id.split('-').pop(), 10);
+      return n > max ? n : max;
+    }, 0);
+  const newId = `PO-${prefix}-${String(maxNum + 1).padStart(3, '0')}`;
+
+  // Build stages (use workCenter for first stage if provided, otherwise round-robin)
+  const stageNames = getSimplifiedStages(format);
+  const stages = [];
+
+  for (const stageName of stageNames) {
+    const rate = STAGE_RATES[stageName] || 120;
+    const processingHrs = Math.round((qty / rate) * 100) / 100;
+    let wcCode = null;
+
+    if (stages.length === 0 && workCenter) {
+      // Use the specified work center for the first stage
+      wcCode = workCenter;
+    } else {
+      // Auto-assign
+      const type = stageName === 'retort' ? 'retort' : stageName;
+      const available = getPlantWCsByType(plantCode, type);
+      if (available.length > 0) {
+        // Pick work center with fewest orders
+        let minCount = Infinity, bestWC = available[0].code;
+        for (const wc of available) {
+          const count = orders.filter(o => o.stages.some(s => s.workCenter === wc.code)).length;
+          if (count < minCount) { minCount = count; bestWC = wc.code; }
+        }
+        wcCode = bestWC;
+      }
+    }
+
+    if (wcCode) {
+      stages.push({ stage: stageName, workCenter: wcCode, processingHrs, startTime: null, endTime: null });
+    }
+  }
+
+  const newOrder = {
+    id: newId, orderId: newId,
+    plantCode, familyId, familyName, format, brandColor,
+    qty, unitsPerHour: STAGE_RATES[stageNames[0]] || 120,
+    stages,
+    dueDate: PERIOD_DUE_DATES[3] || '2026-05-04',
+    priority: priority || 'medium',
+    status: 'planned',
+    sourcePeriodIndex: null,
+  };
+
+  orders.push(newOrder);
+
+  // Re-schedule, re-execute, rebuild
+  _runSchedulingForPlant(plantCode);
+  _simulateExecutionForPlant(plantCode);
+  _buildScheduleResultForPlant(plantCode);
+
+  return { success: true, order: newOrder, schedule: getSchedule(plantCode) };
+}
+
+/**
  * Get KPI summary for a plant schedule.
  */
 export function getScheduleSummary(plantCode) {
