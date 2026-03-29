@@ -8,6 +8,113 @@ import PlanningGrid from '../components/demand/PlanningGrid';
 import AccuracyChart from '../components/demand/AccuracyChart';
 import CascadeViz from '../components/CascadeViz';
 
+/* ──────────────────────────────────────────────────────────────────
+ * Static fallback data — used when API is unavailable (e.g. Vercel)
+ * Champion Pet Foods: ORIJEN + ACANA, 9 product families, 105 SKUs
+ * ────────────────────────────────────────────────────────────────── */
+const FAMILIES = [
+  { id: 'ORI-DOG-DRY', name: 'ORIJEN Dog Dry', brand: 'ORIJEN', skus: 18 },
+  { id: 'ORI-CAT-DRY', name: 'ORIJEN Cat Dry', brand: 'ORIJEN', skus: 12 },
+  { id: 'ORI-FD',      name: 'ORIJEN Freeze-Dried', brand: 'ORIJEN', skus: 10 },
+  { id: 'ORI-TREATS',  name: 'ORIJEN Treats', brand: 'ORIJEN', skus: 8 },
+  { id: 'ACA-DOG-DRY', name: 'ACANA Dog Dry', brand: 'ACANA', skus: 20 },
+  { id: 'ACA-CAT-DRY', name: 'ACANA Cat Dry', brand: 'ACANA', skus: 12 },
+  { id: 'ACA-WET-DOG', name: 'ACANA Wet Dog', brand: 'ACANA', skus: 10 },
+  { id: 'ACA-WET-CAT', name: 'ACANA Wet Cat', brand: 'ACANA', skus: 8 },
+  { id: 'ACA-SINGLES', name: 'ACANA Singles', brand: 'ACANA', skus: 7 },
+];
+
+// Generate 12 weekly Monday dates starting 6 weeks before today
+const _fb_baseDate = new Date('2026-03-16'); // Monday anchor
+const _fb_weeks = Array.from({ length: 12 }, (_, i) => {
+  const d = new Date(_fb_baseDate);
+  d.setDate(d.getDate() + i * 7);
+  return d.toISOString().slice(0, 10);
+});
+const _fb_historyPeriods = _fb_weeks.slice(0, 6);
+const _fb_forecastPeriods = _fb_weeks.slice(6);
+
+// Realistic weekly case volumes per family (history → forecast with slight growth)
+const _fb_familyVolumes = {
+  'ORI-DOG-DRY': [4820, 5010, 4690, 5230, 4950, 5180,  5320, 5410, 5280, 5500, 5390, 5620],
+  'ORI-CAT-DRY': [2140, 2250, 2080, 2310, 2190, 2270,  2350, 2420, 2300, 2480, 2410, 2530],
+  'ORI-FD':      [1380, 1420, 1290, 1510, 1350, 1460,  1520, 1580, 1490, 1610, 1550, 1640],
+  'ORI-TREATS':  [ 960, 1010,  920, 1040,  980, 1020,  1060, 1100, 1040, 1130, 1080, 1150],
+  'ACA-DOG-DRY': [6350, 6580, 6210, 6720, 6440, 6630,  6810, 6950, 6730, 7020, 6890, 7160],
+  'ACA-CAT-DRY': [2480, 2560, 2370, 2620, 2510, 2590,  2670, 2730, 2640, 2790, 2710, 2850],
+  'ACA-WET-DOG': [1750, 1820, 1680, 1900, 1780, 1850,  1920, 1970, 1890, 2010, 1950, 2060],
+  'ACA-WET-CAT': [1120, 1180, 1060, 1230, 1150, 1200,  1260, 1310, 1240, 1340, 1290, 1370],
+  'ACA-SINGLES': [ 890,  940,  850,  970,  910,  950,   990, 1030,  970, 1050, 1010, 1080],
+};
+
+// Aggregate totals across all families
+const _fb_totalHistory = _fb_historyPeriods.map((_, i) =>
+  FAMILIES.reduce((s, f) => s + _fb_familyVolumes[f.id][i], 0));
+const _fb_totalStat = _fb_forecastPeriods.map((_, i) =>
+  FAMILIES.reduce((s, f) => s + _fb_familyVolumes[f.id][6 + i], 0));
+
+const FALLBACK_DIMENSIONS = {
+  product: {
+    label: 'Product',
+    values: [
+      { level: 'brand', id: 'ORIJEN', name: 'ORIJEN', children: FAMILIES.filter(f => f.brand === 'ORIJEN').map(f => f.id) },
+      { level: 'brand', id: 'ACANA', name: 'ACANA', children: FAMILIES.filter(f => f.brand === 'ACANA').map(f => f.id) },
+      ...FAMILIES.map(f => ({ level: 'family', id: f.id, name: f.name, parent: f.brand })),
+    ],
+  },
+  customer: {
+    label: 'Customer',
+    values: [
+      { id: 'PETCO', name: 'Petco' },
+      { id: 'PETSMART', name: 'PetSmart' },
+      { id: 'CHEWY', name: 'Chewy' },
+      { id: 'AMAZON', name: 'Amazon' },
+      { id: 'INDIE', name: 'Independent Retailers' },
+    ],
+  },
+};
+
+const FALLBACK_SUMMARY = {
+  company: 'Champion Pet Foods',
+  skus: 105,
+  customers: 5,
+  families: 9,
+  brands: 2,
+};
+
+const FALLBACK_FORECAST = {
+  level: 'all',
+  id: 'all',
+  method: 'Holt-Winters + ML Ensemble',
+  customer: null,
+  hasOverrides: true,
+  overrideCount: 3,
+  skuCount: 105,
+  historyPeriods: _fb_historyPeriods,
+  forecastPeriods: _fb_forecastPeriods,
+  history: _fb_totalHistory,
+  statForecast: _fb_totalStat,
+  finalForecast: _fb_totalStat.map((v, i) => i === 2 ? v + 340 : i === 4 ? v - 210 : i === 5 ? v + 560 : v),
+  breadcrumb: [{ level: 'all', id: 'all', name: 'All Products' }],
+  children: FAMILIES.map(f => ({
+    level: 'family',
+    id: f.id,
+    name: f.name,
+    skuCount: f.skus,
+  })),
+};
+
+const _fb_accOffsets = [[320, -110], [-180, 90], [410, -60], [-250, 140], [190, -80], [-140, 50]];
+const FALLBACK_ACCURACY = {
+  metrics: { mape: 12.4, bias: -38, trackingSignal: 1.7, mad: 312 },
+  bars: _fb_historyPeriods.map((d, i) => ({
+    period: d,
+    actual: _fb_totalHistory[i],
+    stat: _fb_totalHistory[i] + _fb_accOffsets[i][0],
+    final: _fb_totalHistory[i] + _fb_accOffsets[i][1],
+  })),
+};
+
 const TABS = [
   { id: 'consensus', label: 'Consensus Plan' },
   { id: 'history', label: 'Demand History' },
@@ -29,13 +136,13 @@ export default function DemandPage() {
   // Fetch dimensions once
   useEffect(() => {
     fetch('/api/demand/dimensions')
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then(setDimensions)
-      .catch(() => {});
+      .catch(() => setDimensions(FALLBACK_DIMENSIONS));
     fetch('/api/demand/summary')
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then(setSummary)
-      .catch(() => {});
+      .catch(() => setSummary(FALLBACK_SUMMARY));
   }, []);
 
   // Fetch data when scope or tab changes
@@ -46,31 +153,31 @@ export default function DemandPage() {
 
     if (activeTab === 'consensus' || activeTab === 'history') {
       fetch(`/api/demand/forecast?${params}`)
-        .then(r => r.json())
+        .then(r => { if (!r.ok) throw new Error(); return r.json(); })
         .then(data => {
           setForecastData(data);
           setLoading(false);
         })
-        .catch(() => setLoading(false));
+        .catch(() => { setForecastData(FALLBACK_FORECAST); setLoading(false); });
     }
 
     if (activeTab === 'history') {
       fetch(`/api/demand/history?${params}`)
-        .then(r => r.json())
+        .then(r => { if (!r.ok) throw new Error(); return r.json(); })
         .then(data => {
           setHistoryData(data);
         })
-        .catch(() => {});
+        .catch(() => setHistoryData(FALLBACK_FORECAST));
     }
 
     if (activeTab === 'accuracy') {
       fetch(`/api/demand/accuracy?${params}`)
-        .then(r => r.json())
+        .then(r => { if (!r.ok) throw new Error(); return r.json(); })
         .then(data => {
           setAccuracyData(data);
           setLoading(false);
         })
-        .catch(() => setLoading(false));
+        .catch(() => { setAccuracyData(FALLBACK_ACCURACY); setLoading(false); });
     }
   }, [scope, activeTab]);
 

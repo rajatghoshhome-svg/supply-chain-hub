@@ -11,6 +11,106 @@ const TABS = [
 
 const API = '/api/production-plan/champion';
 
+// ─── Static fallback data (Vercel / no backend) ──────────────────────────────
+const PERIODS = ['W1','W2','W3','W4','W5','W6','W7','W8','W9','W10','W11','W12'];
+const mkStrategy = (prod, ei, cost, excCount, overtime, rccp) => ({
+  production: prod, endingInventory: ei, totalCost: cost, overtime,
+  costBreakdown: { regularLabor: cost * 0.45, materials: cost * 0.35, overtime: cost * 0.08, inventory: cost * 0.07, subcontract: cost * 0.05 },
+  exceptions: Array.from({ length: excCount }, (_, i) => ({ id: `S-${i}` })),
+  rccp: rccp || [
+    { code: 'EXT-1', capacityHoursPerPeriod: 120, hoursPerUnit: 0.0053, utilization: [78,82,85,94,98,102,96,88,84,80,77,75], overloaded: [false,false,false,false,false,true,false,false,false,false,false,false], loadHours: [94,98,102,113,118,122,115,106,101,96,92,90] },
+    { code: 'COAT-1', capacityHoursPerPeriod: 80, hoursPerUnit: 0.0035, utilization: [65,68,72,78,82,88,80,74,70,66,64,62], overloaded: Array(12).fill(false), loadHours: [52,54,58,62,66,70,64,59,56,53,51,50] },
+    { code: 'PKG-1', capacityHoursPerPeriod: 100, hoursPerUnit: 0.0018, utilization: [58,62,65,72,76,80,74,68,64,60,58,55], overloaded: Array(12).fill(false), loadHours: [58,62,65,72,76,80,74,68,64,60,58,55] },
+  ],
+});
+const grossReqsA = [23252,21957,22508,23092,32052,34800,28500,24100,22800,21400,20900,21500];
+const FALLBACK = {
+  summary: { familiesPlanned: 9, totalExceptions: 52, criticalExceptions: 7 },
+  plants: { plants: [
+    { plantCode: 'PLT-DOGSTAR', plantName: 'DogStar Kitchens', familyPlans: [
+      { familyId: 'ORI-DOG-DRY', familyName: 'Orijen Dry Dog Food', plan: { periods: PERIODS, grossReqs: grossReqsA, recommended: 'chase', strategies: {
+        chase: mkStrategy([23252,21957,22508,23092,32052,34800,28500,24100,22800,21400,20900,21500], [0,0,0,0,0,0,0,0,0,0,0,0], 926278, 0),
+        level: mkStrategy(Array(12).fill(21518), [0,-2266,-5018,-8352,-14586,-21804,-28786,-33368,-36650,-38632,-40014,-42032], 912418, 2),
+        hybrid: mkStrategy([21518,21518,21518,21518,28000,32000,26000,23000,21518,21518,21518,21518], [0,-2266,-5018,-8352,-12704,-15504,-18004,-19104,-20386,-20268,-19650,-20632], 966223, 2, [0,0,0,0,6482,10482,4482,1482,0,0,0,0]),
+      }}},
+      { familyId: 'ORI-CAT-DRY', familyName: 'Orijen Dry Cat Food', plan: { periods: PERIODS, grossReqs: grossReqsA.map(v => Math.round(v * 0.6)), recommended: 'chase', strategies: {
+        chase: mkStrategy(grossReqsA.map(v => Math.round(v * 0.6)), Array(12).fill(0), 548200, 0),
+        level: mkStrategy(Array(12).fill(12911), grossReqsA.map((v, i) => Math.round(12911 * (i + 1) - grossReqsA.slice(0, i + 1).reduce((s, x) => s + Math.round(x * 0.6), 0))), 534800, 1),
+        hybrid: mkStrategy(grossReqsA.map(v => Math.round(v * 0.58)), grossReqsA.map(v => Math.round(v * -0.02)), 572100, 1, grossReqsA.map(() => 0)),
+      }}},
+      { familyId: 'ORI-FD', familyName: 'Orijen Freeze-Dried', plan: { periods: PERIODS, grossReqs: grossReqsA.map(v => Math.round(v * 0.3)), recommended: 'hybrid', strategies: {
+        chase: mkStrategy(grossReqsA.map(v => Math.round(v * 0.3)), Array(12).fill(0), 412000, 0),
+        level: mkStrategy(Array(12).fill(6456), Array(12).fill(200), 398000, 0),
+        hybrid: mkStrategy(grossReqsA.map(v => Math.round(v * 0.29)), Array(12).fill(100), 405000, 0, grossReqsA.map(() => 0)),
+      }}},
+      { familyId: 'ORI-TREATS', familyName: 'Orijen Treats', plan: { periods: PERIODS, grossReqs: grossReqsA.map(v => Math.round(v * 0.15)), recommended: 'chase', strategies: {
+        chase: mkStrategy(grossReqsA.map(v => Math.round(v * 0.15)), Array(12).fill(0), 198000, 0),
+        level: mkStrategy(Array(12).fill(3228), Array(12).fill(100), 192000, 0),
+        hybrid: mkStrategy(grossReqsA.map(v => Math.round(v * 0.145)), Array(12).fill(50), 195000, 0, grossReqsA.map(() => 0)),
+      }}},
+      { familyId: 'ACA-DOG-DRY', familyName: 'Acana Dry Dog Food', plan: { periods: PERIODS, grossReqs: grossReqsA.map(v => Math.round(v * 0.8)), recommended: 'chase', strategies: {
+        chase: mkStrategy(grossReqsA.map(v => Math.round(v * 0.8)), Array(12).fill(0), 745000, 0),
+        level: mkStrategy(Array(12).fill(17214), Array(12).fill(-500), 728000, 1),
+        hybrid: mkStrategy(grossReqsA.map(v => Math.round(v * 0.78)), Array(12).fill(-200), 762000, 1, grossReqsA.map(() => 0)),
+      }}},
+      { familyId: 'ACA-CAT-DRY', familyName: 'Acana Dry Cat Food', plan: { periods: PERIODS, grossReqs: grossReqsA.map(v => Math.round(v * 0.4)), recommended: 'chase', strategies: {
+        chase: mkStrategy(grossReqsA.map(v => Math.round(v * 0.4)), Array(12).fill(0), 365000, 0),
+        level: mkStrategy(Array(12).fill(8607), Array(12).fill(100), 355000, 0),
+        hybrid: mkStrategy(grossReqsA.map(v => Math.round(v * 0.39)), Array(12).fill(50), 360000, 0, grossReqsA.map(() => 0)),
+      }}},
+    ]},
+    { plantCode: 'PLT-NORTHSTAR', plantName: 'NorthStar Kitchen', familyPlans: [
+      { familyId: 'ACA-WET-DOG', familyName: 'Acana Wet Dog Food', plan: { periods: PERIODS, grossReqs: grossReqsA.map(v => Math.round(v * 0.5)), recommended: 'hybrid', strategies: {
+        chase: mkStrategy(grossReqsA.map(v => Math.round(v * 0.5)), Array(12).fill(0), 482000, 0),
+        level: mkStrategy(Array(12).fill(10759), Array(12).fill(-300), 468000, 1),
+        hybrid: mkStrategy(grossReqsA.map(v => Math.round(v * 0.48)), Array(12).fill(-100), 475000, 1, grossReqsA.map(() => 0)),
+      }}},
+      { familyId: 'ACA-WET-CAT', familyName: 'Acana Wet Cat Food', plan: { periods: PERIODS, grossReqs: grossReqsA.map(v => Math.round(v * 0.25)), recommended: 'level', strategies: {
+        chase: mkStrategy(grossReqsA.map(v => Math.round(v * 0.25)), Array(12).fill(0), 248000, 0),
+        level: mkStrategy(Array(12).fill(5379), Array(12).fill(200), 238000, 0),
+        hybrid: mkStrategy(grossReqsA.map(v => Math.round(v * 0.24)), Array(12).fill(100), 242000, 0, grossReqsA.map(() => 0)),
+      }}},
+      { familyId: 'ACA-SINGLES', familyName: 'Acana Singles', plan: { periods: PERIODS, grossReqs: grossReqsA.map(v => Math.round(v * 0.35)), recommended: 'chase', strategies: {
+        chase: mkStrategy(grossReqsA.map(v => Math.round(v * 0.35)), Array(12).fill(0), 328000, 0),
+        level: mkStrategy(Array(12).fill(7531), Array(12).fill(-100), 318000, 0),
+        hybrid: mkStrategy(grossReqsA.map(v => Math.round(v * 0.34)), Array(12).fill(0), 322000, 0, grossReqsA.map(() => 0)),
+      }}},
+    ]},
+  ]},
+  exceptions: [
+    { id: 'EXC-001', type: 'capacity-overload', severity: 'critical', status: 'open', message: 'EXT-1 at DogStar exceeds capacity in W6 (102% utilization)', plant: 'PLT-DOGSTAR', familyId: 'ORI-DOG-DRY', period: 'W6', recommendation: 'Shift 4,800 units to NorthStar or authorize Saturday overtime at DogStar.' },
+    { id: 'EXC-002', type: 'capacity-overload', severity: 'critical', status: 'open', message: 'EXT-1 at DogStar near capacity in W5 (98% utilization)', plant: 'PLT-DOGSTAR', familyId: 'ORI-DOG-DRY', period: 'W5', recommendation: 'Pre-build in W3-W4 to reduce W5 peak load.' },
+    { id: 'EXC-003', type: 'stockout-risk', severity: 'critical', status: 'open', message: 'Orijen Dry Dog Food projected stockout in W4 under level strategy', plant: 'PLT-DOGSTAR', familyId: 'ORI-DOG-DRY', period: 'W4', recommendation: 'Switch to chase or hybrid strategy for this family.' },
+    { id: 'EXC-004', type: 'demand-spike', severity: 'warning', status: 'open', message: 'Orijen Dry Dog Food demand increases 39% in W5 vs W4', plant: 'PLT-DOGSTAR', familyId: 'ORI-DOG-DRY', period: 'W5', recommendation: 'Verify promotional forecast accuracy. Consider pre-build.' },
+    { id: 'EXC-005', type: 'demand-spike', severity: 'warning', status: 'open', message: 'Orijen Freeze-Dried demand surge in W5-W6 (promotional period)', plant: 'PLT-DOGSTAR', familyId: 'ORI-FD', period: 'W5-W6', recommendation: 'Confirm promotional lift with demand planning. Begin pre-build in W3.' },
+    { id: 'EXC-006', type: 'inventory-excess', severity: 'warning', status: 'open', message: 'Acana Wet Cat Food projected 6.2 weeks of supply under level strategy', plant: 'PLT-NORTHSTAR', familyId: 'ACA-WET-CAT', period: 'W8', recommendation: 'Reduce production rate by 8% for W6-W8.' },
+    { id: 'EXC-007', type: 'capacity-overload', severity: 'critical', status: 'open', message: 'Retort line at NorthStar at 96% in W5 across all families', plant: 'PLT-NORTHSTAR', familyId: 'ACA-WET-DOG', period: 'W5', recommendation: 'Prioritize Acana Wet Dog over Acana Wet Cat due to higher stockout risk.' },
+    { id: 'EXC-008', type: 'smoothing-violation', severity: 'warning', status: 'open', message: 'Chase strategy requires 39% production increase W4→W5 for Orijen Dry Dog', plant: 'PLT-DOGSTAR', familyId: 'ORI-DOG-DRY', period: 'W5', recommendation: 'Smoothing policy limits ±20%. Use hybrid strategy or adjust time fence.' },
+    { id: 'EXC-009', type: 'safety-stock', severity: 'warning', status: 'acknowledged', message: 'Acana Dry Dog Food below safety stock target in W6-W7', plant: 'PLT-DOGSTAR', familyId: 'ACA-DOG-DRY', period: 'W6-W7', recommendation: 'Increase production by 2,000 units in W5 to rebuild buffer.' },
+    { id: 'EXC-010', type: 'capacity-overload', severity: 'critical', status: 'open', message: 'Packaging line PKG-1 at DogStar near limit in W5-W6 (combined families)', plant: 'PLT-DOGSTAR', familyId: 'ORI-DOG-DRY', period: 'W5-W6', recommendation: 'Add Saturday packaging shift or redistribute to NorthStar.' },
+    { id: 'EXC-011', type: 'changeover', severity: 'info', status: 'open', message: 'High changeover frequency at DogStar EXT-1: 6 changeovers in W5', plant: 'PLT-DOGSTAR', familyId: null, period: 'W5', recommendation: 'Consolidate runs: batch Orijen Dry Dog + Cat together.' },
+    { id: 'EXC-012', type: 'lead-time', severity: 'info', status: 'open', message: 'Fresh chicken supplier lead time increased to 5 days (was 3)', plant: 'PLT-DOGSTAR', familyId: null, period: 'W3+', recommendation: 'Adjust material receipt dates. Consider safety stock increase for chicken-based products.' },
+    { id: 'EXC-013', type: 'capacity-overload', severity: 'critical', status: 'open', message: 'Combined extrusion load at DogStar exceeds 105% in W6', plant: 'PLT-DOGSTAR', familyId: null, period: 'W6', recommendation: 'Critical: authorize overtime or transfer 15% of Acana Dry volume to NorthStar.' },
+    { id: 'EXC-014', type: 'demand-spike', severity: 'warning', status: 'open', message: 'Acana Wet Dog Food summer seasonal ramp begins W5', plant: 'PLT-NORTHSTAR', familyId: 'ACA-WET-DOG', period: 'W5-W8', recommendation: 'Begin production ramp in W4. Ensure retort capacity reserved.' },
+  ],
+  calendars: { calendars: {
+    'PLT-DOGSTAR': { plantName: 'DogStar Kitchens', workingDaysPerWeek: 5, shifts: 2, hoursPerShift: 8, effectiveHoursPerWeek: 80, overtimeAvailable: true, overtimeNotes: 'Saturday shifts available (max 8hrs)', holidays: ['Easter Monday', 'Memorial Day'] },
+    'PLT-NORTHSTAR': { plantName: 'NorthStar Kitchen', workingDaysPerWeek: 5, shifts: 2, hoursPerShift: 8, effectiveHoursPerWeek: 80, overtimeAvailable: true, overtimeNotes: 'Saturday + Sunday available (12hrs max)', holidays: ['Good Friday', 'Victoria Day'] },
+  }},
+  rates: { rates: [
+    { plantCode: 'PLT-DOGSTAR', familyId: 'ORI-DOG-DRY', familyName: 'Orijen Dry Dog Food', unitsPerHour: 4200, setupTimeHrs: 1.5, changeoverTimeHrs: 0.75, minRunSize: 5000, maxRunSize: 50000 },
+    { plantCode: 'PLT-DOGSTAR', familyId: 'ORI-CAT-DRY', familyName: 'Orijen Dry Cat Food', unitsPerHour: 3800, setupTimeHrs: 1.5, changeoverTimeHrs: 0.75, minRunSize: 3000, maxRunSize: 35000 },
+    { plantCode: 'PLT-DOGSTAR', familyId: 'ORI-FD', familyName: 'Orijen Freeze-Dried', unitsPerHour: 1200, setupTimeHrs: 2.0, changeoverTimeHrs: 1.0, minRunSize: 1000, maxRunSize: 15000 },
+    { plantCode: 'PLT-DOGSTAR', familyId: 'ORI-TREATS', familyName: 'Orijen Treats', unitsPerHour: 5500, setupTimeHrs: 0.5, changeoverTimeHrs: 0.5, minRunSize: 2000, maxRunSize: 25000 },
+    { plantCode: 'PLT-DOGSTAR', familyId: 'ACA-DOG-DRY', familyName: 'Acana Dry Dog Food', unitsPerHour: 4500, setupTimeHrs: 1.5, changeoverTimeHrs: 0.75, minRunSize: 5000, maxRunSize: 55000 },
+    { plantCode: 'PLT-DOGSTAR', familyId: 'ACA-CAT-DRY', familyName: 'Acana Dry Cat Food', unitsPerHour: 4000, setupTimeHrs: 1.5, changeoverTimeHrs: 0.75, minRunSize: 3000, maxRunSize: 40000 },
+    { plantCode: 'PLT-NORTHSTAR', familyId: 'ACA-WET-DOG', familyName: 'Acana Wet Dog Food', unitsPerHour: 2800, setupTimeHrs: 2.0, changeoverTimeHrs: 1.5, minRunSize: 3000, maxRunSize: 30000 },
+    { plantCode: 'PLT-NORTHSTAR', familyId: 'ACA-WET-CAT', familyName: 'Acana Wet Cat Food', unitsPerHour: 2600, setupTimeHrs: 2.0, changeoverTimeHrs: 1.5, minRunSize: 2000, maxRunSize: 25000 },
+    { plantCode: 'PLT-NORTHSTAR', familyId: 'ACA-SINGLES', familyName: 'Acana Singles', unitsPerHour: 3200, setupTimeHrs: 1.0, changeoverTimeHrs: 1.0, minRunSize: 2000, maxRunSize: 28000 },
+  ]},
+  heuristics: { heuristics: { lotSizing: 'LFL', safetyStock: 'wos', timeFence: 'moderate', capacityPriority: 'stockout', smoothing: 'light', inventoryTarget: 'balanced' }},
+};
+
 // Severity dot colors
 const SEV = { critical: T.risk, warning: T.warn, info: T.inkLight };
 const SEV_BG = { critical: T.riskBg, warning: T.warnBg, info: '#F0F0EE' };
@@ -47,14 +147,14 @@ export default function ProductionPlanPage() {
 
   const fetchSummary = useCallback(() => {
     fetch(`${API}/summary`)
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then(setSummary)
-      .catch(() => {});
+      .catch(() => setSummary(FALLBACK.summary));
   }, []);
 
   const fetchPlants = useCallback(() => {
     fetch(`${API}/plants`)
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then(data => {
         setPlants(data);
         if (data?.plants?.length > 0 && !selectedPlant) {
@@ -64,36 +164,47 @@ export default function ProductionPlanPage() {
         }
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => {
+        const data = FALLBACK.plants;
+        setPlants(data);
+        if (!selectedPlant) {
+          setSelectedPlant(data.plants[0].plantCode);
+          setSelectedFamily(data.plants[0].familyPlans[0].familyId);
+        }
+        setLoading(false);
+      });
   }, [selectedPlant]);
 
   const fetchExceptions = useCallback(() => {
     const params = exceptionFilter !== 'all' ? `?severity=${exceptionFilter}` : '';
     fetch(`${API}/exceptions${params}`)
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then(data => setExceptions(data.exceptions || []))
-      .catch(() => {});
+      .catch(() => {
+        const all = FALLBACK.exceptions;
+        setExceptions(exceptionFilter === 'all' ? all : all.filter(e => e.severity === exceptionFilter));
+      });
   }, [exceptionFilter]);
 
   const fetchCalendars = useCallback(() => {
     fetch(`${API}/calendars`)
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then(setCalendars)
-      .catch(() => {});
+      .catch(() => setCalendars(FALLBACK.calendars));
   }, []);
 
   const fetchRates = useCallback(() => {
     fetch(`${API}/rates`)
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then(setRates)
-      .catch(() => {});
+      .catch(() => setRates(FALLBACK.rates));
   }, []);
 
   const fetchHeuristics = useCallback(() => {
     fetch(`${API}/heuristics`)
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then(setHeuristics)
-      .catch(() => {});
+      .catch(() => setHeuristics(FALLBACK.heuristics));
   }, []);
 
   const fetchFirmed = useCallback(() => {
@@ -101,7 +212,7 @@ export default function ProductionPlanPage() {
     fetch(`${API}/firm/${selectedPlant}/${selectedFamily}`)
       .then(r => r.json())
       .then(data => setFirmedPeriods(new Set(data.firmedPeriods || [])))
-      .catch(() => {});
+      .catch(() => setFirmedPeriods(new Set([0, 1])));
   }, [selectedPlant, selectedFamily]);
 
   useEffect(() => {
