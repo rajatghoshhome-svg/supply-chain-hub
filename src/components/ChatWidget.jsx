@@ -176,7 +176,7 @@ export default function ChatWidget() {
       if (!started) setLoading(false);
       setTimeout(() => btmRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     } catch {
-      // API unavailable — use intelligent fallback responses
+      // API unavailable — use fallback responses for local dev without backend
       setLoading(false);
       const pool = FALLBACK_RESPONSES[module] || FALLBACK_RESPONSES.general;
       const fallback = pool[Math.floor(Math.random() * pool.length)];
