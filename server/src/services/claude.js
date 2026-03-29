@@ -329,9 +329,9 @@ function buildModuleContext(module) {
 }
 
 export async function streamChat({ module, messages, res }) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.VITE_CLAUDE_API_KEY || process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    throw new Error('ANTHROPIC_API_KEY not configured');
+    throw new Error('VITE_CLAUDE_API_KEY or ANTHROPIC_API_KEY not configured');
   }
 
   const systemPrompt = buildPreamble() + buildModuleContext(module);
