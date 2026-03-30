@@ -522,6 +522,56 @@ export default function MrpPage() {
                         </span>
                         <span><span style={{ color: T.inkLight }}>Safety Stock:</span> {selectedResult.safetyStock ?? '\u2014'}</span>
                       </div>
+                      {/* Inventory Projection Chart */}
+                      <div style={{ padding: '12px 16px 4px' }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, fontFamily: 'Sora', color: T.ink, marginBottom: 8 }}>
+                          Inventory Projection
+                        </div>
+                        <svg viewBox="0 0 700 140" style={{ width: '100%', maxWidth: 700 }}>
+                          {(() => {
+                            const recs = selectedResult.records;
+                            const ss = selectedResult.safetyStock || 0;
+                            const maxVal = Math.max(...recs.map(r => Math.max(r.grossReq, r.projectedOH, r.plannedOrderReceipt)), ss, 1) * 1.2;
+                            const n = recs.length;
+                            const barW = Math.min(50, (640 / n) * 0.4);
+                            const gap = (640 - n * barW * 2) / (n + 1);
+                            return (
+                              <>
+                                {[0.25, 0.5, 0.75, 1].map(f => (
+                                  <g key={f}>
+                                    <line x1="50" y1={120 - f * 100} x2="690" y2={120 - f * 100} stroke={T.border} strokeDasharray="2,3" />
+                                    <text x="46" y={124 - f * 100} textAnchor="end" fontSize="8" fill={T.inkLight} fontFamily="JetBrains Mono">{Math.round(maxVal * f)}</text>
+                                  </g>
+                                ))}
+                                <line x1="50" y1="120" x2="690" y2="120" stroke={T.border} />
+                                {ss > 0 && (
+                                  <>
+                                    <line x1="50" y1={120 - (ss / maxVal) * 100} x2="690" y2={120 - (ss / maxVal) * 100} stroke={T.risk} strokeDasharray="4,3" strokeWidth="1" opacity="0.5" />
+                                    <text x="692" y={124 - (ss / maxVal) * 100} fontSize="7" fill={T.risk} fontFamily="JetBrains Mono" opacity="0.7">SS</text>
+                                  </>
+                                )}
+                                {recs.map((r, i) => {
+                                  const x = 55 + i * (barW * 2 + gap);
+                                  const gH = (r.grossReq / maxVal) * 100;
+                                  const pH = (Math.max(r.projectedOH, 0) / maxVal) * 100;
+                                  return (
+                                    <g key={i}>
+                                      <rect x={x} y={120 - gH} width={barW - 1} height={gH} rx="2" fill={T.risk} opacity="0.2" />
+                                      <rect x={x + barW} y={120 - pH} width={barW - 1} height={pH} rx="2" fill={r.projectedOH < ss ? T.warn : T.safe} opacity="0.65" />
+                                      <text x={x + barW} y="132" textAnchor="middle" fontSize="7" fill={T.inkLight} fontFamily="JetBrains Mono">{r.period}</text>
+                                    </g>
+                                  );
+                                })}
+                                <rect x="420" y="2" width="8" height="8" rx="1" fill={T.risk} opacity="0.2" />
+                                <text x="432" y="10" fontSize="8" fill={T.inkMid} fontFamily="JetBrains Mono">Gross Req</text>
+                                <rect x="510" y="2" width="8" height="8" rx="1" fill={T.safe} opacity="0.65" />
+                                <text x="522" y="10" fontSize="8" fill={T.inkMid} fontFamily="JetBrains Mono">Projected OH</text>
+                              </>
+                            );
+                          })()}
+                        </svg>
+                      </div>
+
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, fontFamily: 'JetBrains Mono' }}>
                         <thead>
                           <tr style={{ borderBottom: `2px solid ${T.border}` }}>

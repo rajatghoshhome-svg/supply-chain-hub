@@ -6,6 +6,7 @@ import Card from '../components/shared/Card';
 import HierarchyNav from '../components/demand/HierarchyNav';
 import PlanningGrid from '../components/demand/PlanningGrid';
 import AccuracyChart from '../components/demand/AccuracyChart';
+import ForecastChart from '../components/demand/ForecastChart';
 import CascadeViz from '../components/CascadeViz';
 
 /* ──────────────────────────────────────────────────────────────────
@@ -115,6 +116,134 @@ const FALLBACK_ACCURACY = {
   })),
 };
 
+// Customer share factors — used when a customer filter is active
+const CUSTOMER_SHARES = {
+  PETCO: 0.35,
+  PETSMART: 0.28,
+  CHEWY: 0.20,
+  AMAZON: 0.12,
+  INDIE: 0.05,
+};
+
+const CUSTOMER_NAMES = {
+  PETCO: 'Petco',
+  PETSMART: 'PetSmart',
+  CHEWY: 'Chewy',
+  AMAZON: 'Amazon',
+  INDIE: 'Independent Retailers',
+};
+
+const FORECAST_METHODS = {
+  all: 'Holt-Winters + ML Ensemble',
+  brand: 'ML Ensemble (Brand Agg.)',
+  family: 'ETS + Gradient Boost',
+};
+
+/**
+ * Build scope-aware fallback forecast data from _fb_familyVolumes.
+ * Returns a forecast object shaped like FALLBACK_FORECAST but filtered
+ * to the requested scope (all / brand / family) and optional customer.
+ */
+function buildFallbackForecast(scope) {
+  const { level, id, customer } = scope;
+
+  // Determine which families are in scope
+  let familiesInScope;
+  if (level === 'family') {
+    familiesInScope = FAMILIES.filter(f => f.id === id);
+  } else if (level === 'brand') {
+    familiesInScope = FAMILIES.filter(f => f.brand === id);
+  } else {
+    familiesInScope = FAMILIES;
+  }
+
+  // Sum weekly volumes across families in scope
+  const rawVolumes = Array.from({ length: 12 }, (_, i) =>
+    familiesInScope.reduce((s, f) => s + _fb_familyVolumes[f.id][i], 0));
+
+  // Apply customer share if selected
+  const share = customer ? (CUSTOMER_SHARES[customer] || 0.15) : 1;
+  const volumes = rawVolumes.map(v => Math.round(v * share));
+
+  const history = volumes.slice(0, 6);
+  const statForecast = volumes.slice(6);
+
+  // Create small deterministic offsets for final vs stat to simulate overrides
+  // Use a simple seed from the scope id so each scope looks different
+  const seed = (id || 'all').split('').reduce((h, c) => h + c.charCodeAt(0), 0);
+  const finalForecast = statForecast.map((v, i) => {
+    const offset = Math.round(Math.sin(seed + i * 2.7) * v * 0.03);
+    return v + offset;
+  });
+  const overrideCount = finalForecast.filter((v, i) => v !== statForecast[i]).length;
+
+  const skuCount = familiesInScope.reduce((s, f) => s + f.skus, 0);
+
+  // Build breadcrumb
+  const breadcrumb = [{ level: 'all', id: 'all', name: 'All Products' }];
+  if (level === 'brand') {
+    breadcrumb.push({ level: 'brand', id, name: id });
+  } else if (level === 'family') {
+    const fam = FAMILIES.find(f => f.id === id);
+    if (fam) {
+      breadcrumb.push({ level: 'brand', id: fam.brand, name: fam.brand });
+      breadcrumb.push({ level: 'family', id: fam.id, name: fam.name });
+    }
+  }
+
+  // Children: show families within scope (or nothing at family level)
+  let children;
+  if (level === 'all') {
+    children = FAMILIES.map(f => ({ level: 'family', id: f.id, name: f.name, skuCount: f.skus }));
+  } else if (level === 'brand') {
+    children = familiesInScope.map(f => ({ level: 'family', id: f.id, name: f.name, skuCount: f.skus }));
+  } else {
+    children = [];
+  }
+
+  return {
+    level,
+    id,
+    method: FORECAST_METHODS[level] || FORECAST_METHODS.all,
+    customer: customer || null,
+    hasOverrides: overrideCount > 0,
+    overrideCount,
+    skuCount,
+    historyPeriods: _fb_historyPeriods,
+    forecastPeriods: _fb_forecastPeriods,
+    history,
+    statForecast,
+    finalForecast,
+    breadcrumb,
+    children,
+  };
+}
+
+/**
+ * Build scope-aware fallback accuracy data.
+ */
+function buildFallbackAccuracy(scope) {
+  const forecast = buildFallbackForecast(scope);
+  const history = forecast.history;
+  // Generate accuracy offsets scaled to the data magnitude
+  const avg = history.reduce((s, v) => s + v, 0) / history.length;
+  const scale = avg / (_fb_totalHistory.reduce((s, v) => s + v, 0) / _fb_totalHistory.length);
+  return {
+    metrics: {
+      mape: +(12.4 + Math.sin((scope.id || 'all').length) * 3.2).toFixed(1),
+      bias: Math.round(-38 * scale),
+      trackingSignal: +(1.7 + Math.cos((scope.id || 'all').length) * 0.5).toFixed(1),
+      mad: Math.round(312 * scale),
+    },
+    bars: _fb_historyPeriods.map((d, i) => ({
+      period: d,
+      actual: history[i],
+      stat: history[i] + Math.round(_fb_accOffsets[i][0] * scale),
+      final: history[i] + Math.round(_fb_accOffsets[i][1] * scale),
+    })),
+  };
+}
+
 const TABS = [
   { id: 'consensus', label: 'Consensus Plan' },
   { id: 'history', label: 'Demand History' },
@@ -158,7 +287,7 @@ export default function DemandPage() {
           setForecastData(data);
           setLoading(false);
         })
-        .catch(() => { setForecastData(FALLBACK_FORECAST); setLoading(false); });
+        .catch(() => { setForecastData(buildFallbackForecast(scope)); setLoading(false); });
     }
 
     if (activeTab === 'history') {
@@ -167,7 +296,7 @@ export default function DemandPage() {
         .then(data => {
           setHistoryData(data);
         })
-        .catch(() => setHistoryData(FALLBACK_FORECAST));
+        .catch(() => setHistoryData(buildFallbackForecast(scope)));
     }
 
     if (activeTab === 'accuracy') {
@@ -177,7 +306,7 @@ export default function DemandPage() {
           setAccuracyData(data);
           setLoading(false);
         })
-        .catch(() => { setAccuracyData(FALLBACK_ACCURACY); setLoading(false); });
+        .catch(() => { setAccuracyData(buildFallbackAccuracy(scope)); setLoading(false); });
     }
   }, [scope, activeTab]);
 
@@ -264,6 +393,7 @@ export default function DemandPage() {
           scope={scope}
           onScopeChange={setScope}
           dimensions={dimensions}
+          forecastData={forecastData}
         />
 
         {/* Scope info bar */}
@@ -322,6 +452,18 @@ export default function DemandPage() {
                 highlight={forecastData.hasOverrides}
               />
             </div>
+
+            {/* Forecast Chart — actuals vs forecast line chart */}
+            <Card title="Demand Trend">
+              <ForecastChart
+                historyPeriods={forecastData.historyPeriods}
+                historyDemand={forecastData.history}
+                forecastPeriods={forecastData.forecastPeriods}
+                forecastDemand={forecastData.finalForecast}
+                fitted={forecastData.statForecast}
+                method={forecastData.method}
+              />
+            </Card>
 
             {/* Planning Grid — history + stat + final forecast rows */}
             <PlanningGrid

@@ -412,6 +412,59 @@ export default function ProductionPlanPage() {
               </div>
             )}
 
+            {/* Demand vs Production Chart */}
+            {strategy && (
+              <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 10, padding: 20, marginBottom: 20 }}>
+                <div style={{ fontFamily: 'Sora', fontSize: 13, fontWeight: 600, color: T.ink, marginBottom: 12 }}>
+                  Demand vs Production — {selectedStrategy}
+                </div>
+                <svg viewBox="0 0 760 200" style={{ width: '100%', maxWidth: 760 }}>
+                  {(() => {
+                    const gross = grossReqs || [];
+                    const prod = strategy.production || [];
+                    const maxVal = Math.max(...gross, ...prod, 1) * 1.15;
+                    const barW = 56 / (gross.length > 8 ? 1.5 : 1);
+                    const gap = (720 - gross.length * barW * 2) / (gross.length + 1);
+                    return (
+                      <>
+                        {/* Grid lines */}
+                        {[0.25, 0.5, 0.75, 1].map(f => (
+                          <g key={f}>
+                            <line x1="40" y1={180 - f * 160} x2="750" y2={180 - f * 160} stroke={T.border} strokeDasharray="3,3" />
+                            <text x="36" y={184 - f * 160} textAnchor="end" fontSize="9" fill={T.inkLight} fontFamily="JetBrains Mono">
+                              {Math.round(maxVal * f / 1000)}k
+                            </text>
+                          </g>
+                        ))}
+                        <line x1="40" y1="180" x2="750" y2="180" stroke={T.border} />
+                        {/* Bars */}
+                        {gross.map((g, i) => {
+                          const x = 45 + i * (barW * 2 + gap);
+                          const gH = (g / maxVal) * 160;
+                          const pH = ((prod[i] || 0) / maxVal) * 160;
+                          const isOT = (strategy.overtime?.[i] || 0) > 0;
+                          return (
+                            <g key={i}>
+                              <rect x={x} y={180 - gH} width={barW - 2} height={gH} rx="3" fill={T.risk} opacity="0.25" />
+                              <rect x={x + barW} y={180 - pH} width={barW - 2} height={pH} rx="3" fill={isOT ? T.warn : T.safe} opacity="0.7" />
+                              <text x={x + barW} y="194" textAnchor="middle" fontSize="8" fill={T.inkLight} fontFamily="JetBrains Mono">
+                                W{i + 1}
+                              </text>
+                            </g>
+                          );
+                        })}
+                        {/* Legend */}
+                        <rect x="580" y="4" width="10" height="10" rx="2" fill={T.risk} opacity="0.25" />
+                        <text x="594" y="13" fontSize="9" fill={T.inkMid} fontFamily="JetBrains Mono">Demand</text>
+                        <rect x="650" y="4" width="10" height="10" rx="2" fill={T.safe} opacity="0.7" />
+                        <text x="664" y="13" fontSize="9" fill={T.inkMid} fontFamily="JetBrains Mono">Production</text>
+                      </>
+                    );
+                  })()}
+                </svg>
+              </div>
+            )}
+
             {/* PSI Table */}
             {strategy && (
               <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 10, overflow: 'hidden', marginBottom: 20 }}>

@@ -14,7 +14,7 @@ const DIMENSION_LABELS = {
   'product-customer': 'By Product × Customer',
 };
 
-export default function HierarchyNav({ scope, onScopeChange, dimensions }) {
+export default function HierarchyNav({ scope, onScopeChange, dimensions, forecastData }) {
   const [breadcrumb, setBreadcrumb] = useState([]);
   const [children, setChildren] = useState([]);
   const [dimension, setDimension] = useState('product');
@@ -23,14 +23,32 @@ export default function HierarchyNav({ scope, onScopeChange, dimensions }) {
 
   // Fetch hierarchy data when scope changes
   useEffect(() => {
+    let cancelled = false;
     fetch(`/api/demand/forecast?level=${level}&id=${id}${customer ? `&customer=${customer}` : ''}`)
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then(data => {
-        setBreadcrumb(data.breadcrumb || []);
-        setChildren(data.children || []);
+        if (!cancelled) {
+          setBreadcrumb(data.breadcrumb || []);
+          setChildren(data.children || []);
+        }
       })
-      .catch(() => {});
-  }, [level, id, customer]);
+      .catch(() => {
+        // Use forecastData from parent as fallback (already built from buildFallbackForecast)
+        if (!cancelled && forecastData) {
+          setBreadcrumb(forecastData.breadcrumb || []);
+          setChildren(forecastData.children || []);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [level, id, customer]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync from parent forecastData when it arrives (fallback mode)
+  useEffect(() => {
+    if (forecastData?.breadcrumb) {
+      setBreadcrumb(forecastData.breadcrumb || []);
+      setChildren(forecastData.children || []);
+    }
+  }, [forecastData?.level, forecastData?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDrillDown = (child) => {
     onScopeChange({ level: child.level, id: child.id, customer });
@@ -106,7 +124,7 @@ export default function HierarchyNav({ scope, onScopeChange, dimensions }) {
         >
           All Products
         </button>
-        {breadcrumb.map((crumb, i) => (
+        {breadcrumb.filter(c => c.level !== 'all').map((crumb, i) => (
           <span key={crumb.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <span style={{ color: T.inkGhost, fontSize: 10 }}>›</span>
             <button

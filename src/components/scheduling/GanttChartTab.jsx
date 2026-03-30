@@ -3,9 +3,9 @@ import { T } from '../../styles/tokens';
 
 /* ─── Zoom presets ─────────────────────────────────────────────────────────── */
 const ZOOM = {
-  shift: { label: 'Shift', hoursPerSegment: 8, pxPerHour: 10 },
-  day:   { label: 'Day',   hoursPerSegment: 24, pxPerHour: 80 / 24 },
-  week:  { label: 'Week',  hoursPerSegment: 168, pxPerHour: 80 / 168 },
+  shift: { label: 'Shift', hoursPerSegment: 8, pxPerHour: 30 },
+  day:   { label: 'Day',   hoursPerSegment: 24, pxPerHour: 10 },
+  week:  { label: 'Week',  hoursPerSegment: 168, pxPerHour: 3 },
 };
 
 const LEFT_COL = 180;
