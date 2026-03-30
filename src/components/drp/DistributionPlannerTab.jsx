@@ -265,6 +265,44 @@ export default function DistributionPlannerTab({ plan, onUpdateSplit, onUpdateCa
         ))}
       </div>
 
+      {/* DC Days of Supply Chart */}
+      {dcCodes.length > 0 && (
+        <Card title="DC Days of Supply by Product" style={{ marginBottom: 16 }}>
+          <svg viewBox="0 0 700 180" style={{ width: '100%', maxWidth: 700 }}>
+            {(() => {
+              const rows = [];
+              for (const dc of dcCodes) {
+                const inv = dcInventory[dc] || {};
+                for (const sku of Object.keys(inv)) {
+                  rows.push({ dc, sku, doh: inv[sku].daysOfSupply || 0, belowSS: inv[sku].onHand < inv[sku].safetyStock });
+                }
+              }
+              const rowH = rows.length > 0 ? Math.min(22, 160 / rows.length) : 20;
+              const maxDOH = Math.max(...rows.map(r => r.doh), 30);
+              return rows.map((r, i) => {
+                const y = 10 + i * rowH;
+                const barW = (r.doh / maxDOH) * 420;
+                const color = r.belowSS ? T.risk : r.doh < 14 ? T.warn : T.safe;
+                return (
+                  <g key={`${r.dc}-${r.sku}`}>
+                    <text x="145" y={y + rowH * 0.7} textAnchor="end" fontSize="9" fill={T.inkMid} fontFamily="JetBrains Mono">
+                      {r.dc} · {r.sku.replace(/-/g, ' ').slice(0, 18)}
+                    </text>
+                    <rect x="150" y={y + 2} width={barW} height={rowH - 6} rx="3" fill={color} opacity="0.6" />
+                    {/* Safety stock line at 14 days */}
+                    <line x1={150 + (14 / maxDOH) * 420} y1={y} x2={150 + (14 / maxDOH) * 420} y2={y + rowH} stroke={T.inkGhost} strokeDasharray="2,2" />
+                    <text x={155 + barW} y={y + rowH * 0.7} fontSize="9" fill={color} fontFamily="JetBrains Mono" fontWeight="600">
+                      {r.doh}d
+                    </text>
+                  </g>
+                );
+              });
+            })()}
+            <text x={150 + (14 / 30) * 420} y="8" textAnchor="middle" fontSize="8" fill={T.inkGhost} fontFamily="JetBrains Mono">14d target</text>
+          </svg>
+        </Card>
+      )}
+
       {/* Lane summary */}
       <Card title="Plant → DC Lanes">
         <LaneCards />
